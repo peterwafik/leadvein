@@ -14,7 +14,7 @@ class JobConfig:
     source: str = "urlscan"
     limit: int = 200
     keyword: str = ""
-    country: str = ""
+    country: str = ""  # reserved for future geo-filtering; captured but not yet applied to discovery
     delay: float = 1.0
     concurrency: int = 5
     only_confirmed: bool = True
@@ -78,12 +78,20 @@ async def run_job(recipe, config: JobConfig, *, discover_fn=_discover_meta,
                 await queue.put(("skip", host, None))
                 return
             await limiter.wait()
-            loop = asyncio.get_event_loop()
-            final_url, html = await loop.run_in_executor(None, lambda: fetch_fn(url))
+            loop = asyncio.get_running_loop()
+            try:
+                final_url, html = await loop.run_in_executor(None, lambda: fetch_fn(url))
+            except Exception:
+                await queue.put(("skip", host, None))
+                return
             if not html:
                 await queue.put(("skip", host, None))
                 return
-            lead = analyse(recipe, final_url or url, html)
+            try:
+                lead = analyse(recipe, final_url or url, html)
+            except Exception:
+                await queue.put(("skip", host, None))
+                return
             await queue.put(("lead", host, lead))
 
     tasks = [asyncio.create_task(worker(h)) for h in hosts]

@@ -100,3 +100,23 @@ def test_done_carries_totals():
     done = events[-1]
     assert done["checked"] == 2
     assert done["confirmed"] == 1
+
+
+def test_worker_exception_is_counted_not_dropped():
+    GF_local = GF
+    def boom_fetch(url, **kwargs):
+        raise RuntimeError("boom")
+    cfg = JobConfig(source="urlscan", limit=10, keyword="", country="",
+                    delay=0.0, concurrency=2, only_confirmed=False,
+                    urlscan_key=None, publicwww_key=None)
+    async def _run():
+        events = []
+        async for ev in run_job(GF_local, cfg, discover_fn=fake_discover,
+                                fetch_fn=boom_fetch, robots=AllowAllRobots()):
+            events.append(ev)
+        return events
+    events = asyncio.run(_run())
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["checked"] == done["total"]   # nothing silently dropped
+    assert done["checked"] == 2
