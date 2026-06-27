@@ -23,12 +23,15 @@ def test_robots_failure_open():
 
 
 def test_rate_limiter_enforces_delay():
+    delay = 0.1
     async def run():
-        rl = RateLimiter(0.05)
+        rl = RateLimiter(delay)
         loop = asyncio.get_event_loop()
         t0 = loop.time()
-        await rl.wait()
-        await rl.wait()
+        await rl.wait()  # first call returns immediately
+        await rl.wait()  # second call must wait ~delay
         return loop.time() - t0
     elapsed = asyncio.run(run())
-    assert elapsed >= 0.05
+    # Allow a small slack for OS timer granularity (asyncio.sleep can wake a
+    # hair early on Windows); still far above 0, which proves the limiter waited.
+    assert elapsed >= delay * 0.9
