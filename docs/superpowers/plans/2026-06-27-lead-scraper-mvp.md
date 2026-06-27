@@ -18,6 +18,8 @@
 - Politeness defaults: global request delay 1.0s, concurrency cap 5 (max 10), per-request timeout 12s. Respect robots.txt.
 - Email filtering drops image extensions (`.png .jpg .jpeg .gif .svg .webp .ico`) and tracking/vendor domains (`fbgcdn`, `sentry`, `wixpress`, `cloudflare`, `gstatic`, `googleapis`, `w3.org`, `schema.org`, `example.com`).
 - Excel tab name is `<Type> Prospects`. CSV mirror always available.
+- A job MUST surface the exact discovery query and the raw candidate count from the source; the UI MUST distinguish "0 candidates found" (discovery returned nothing) from "N candidates found, 0 confirmed" (verification matched nothing). These are different states, never collapsed into one message.
+- When `manual_hosts` is provided, discovery is bypassed entirely and only those hosts are verified/enriched (query reported as `(manual domain list)`).
 - Every outbound-data action collects only publicly published business contact info; UI shows a ToS/GDPR/CAN-SPAM disclaimer.
 - Use `py -3.11 -m pytest` for tests. Commit after each task.
 
@@ -611,7 +613,8 @@ git commit -m "feat(engine): fetch + analyse enrichment"
   - `normalize_hosts(hosts:Iterable[str], exclude_hosts:list[str]) -> list[str]` — lowercase, strip `www.`, dedup, drop excluded.
   - `discover_urlscan(query:str, *, limit:int, api_key:str|None, session=requests) -> list[str]`
   - `discover_publicwww(query:str, *, limit:int, api_key:str, session=requests) -> list[str]`
-  - `discover(recipe:Recipe, *, source:str, limit:int, keyword:str="", urlscan_key=None, publicwww_key=None, session=requests) -> list[str]` (source in {"urlscan","publicwww"}).
+  - `discover_meta(recipe:Recipe, *, source:str, limit:int, keyword:str="", urlscan_key=None, publicwww_key=None, session=requests) -> dict` returning `{"query": str, "raw_count": int, "hosts": list[str]}` — `raw_count` is the candidate count straight from the source BEFORE normalize/dedup; `hosts` is the deduped, exclude-filtered, limited list to verify.
+  - `discover(recipe:Recipe, *, source:str, limit:int, keyword:str="", urlscan_key=None, publicwww_key=None, session=requests) -> list[str]` (source in {"urlscan","publicwww"}); thin wrapper returning `discover_meta(...)["hosts"]`.
 
 - [ ] **Step 1: Write failing test `tests/test_discover.py`**
 
@@ -684,6 +687,23 @@ def test_discover_urlscan_respects_limit():
     hosts = discover_urlscan("q", limit=2, api_key=None, session=session)
     assert len(hosts) == 2
     assert session.calls == 1
+
+
+def test_discover_meta_surfaces_query_and_raw_count():
+    from app.engine.discover import discover_meta
+    # two raw results, one is the vendor's own infra host -> excluded after dedup
+    page = FakeResp(200, {
+        "results": [
+            {"page": {"domain": "marios.com"}, "sort": [1]},
+            {"page": {"domain": "cdn.fbgcdn.com"}, "sort": [2]},
+        ],
+        "has_more": False,
+    })
+    session = FakeSession([page])
+    meta = discover_meta(GF, source="urlscan", limit=50, session=session)
+    assert meta["query"] == "domain:fbgcdn.com"
+    assert meta["raw_count"] == 2            # raw, before exclude/dedup
+    assert meta["hosts"] == ["marios.com"]   # fbgcdn host filtered out
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -775,8 +795,8 @@ def discover_publicwww(query: str, *, limit: int, api_key: str,
     return lines[:limit]
 
 
-def discover(recipe, *, source: str, limit: int, keyword: str = "",
-             urlscan_key=None, publicwww_key=None, session=requests) -> list[str]:
+def discover_meta(recipe, *, source: str, limit: int, keyword: str = "",
+                  urlscan_key=None, publicwww_key=None, session=requests) -> dict:
     if source == "publicwww":
         q = recipe.publicwww_query
         if keyword:
@@ -789,7 +809,15 @@ def discover(recipe, *, source: str, limit: int, keyword: str = "",
             q = f"{q} AND page.title:{keyword}"
         raw = discover_urlscan(q, limit=limit * 2, api_key=urlscan_key,
                                session=session)
-    return normalize_hosts(raw, recipe.exclude_hosts)[:limit]
+    hosts = normalize_hosts(raw, recipe.exclude_hosts)[:limit]
+    return {"query": q, "raw_count": len(raw), "hosts": hosts}
+
+
+def discover(recipe, *, source: str, limit: int, keyword: str = "",
+             urlscan_key=None, publicwww_key=None, session=requests) -> list[str]:
+    return discover_meta(recipe, source=source, limit=limit, keyword=keyword,
+                         urlscan_key=urlscan_key, publicwww_key=publicwww_key,
+                         session=session)["hosts"]
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1095,10 +1123,10 @@ git commit -m "feat(engine): xlsx/csv export + append-to-tracker"
 - Test: `tests/test_runner.py`
 
 **Interfaces:**
-- Consumes: `Recipe`, `discover`, `fetch`, `analyse`, `RobotsCache`, `RateLimiter`.
+- Consumes: `Recipe`, `discover_meta`, `fetch`, `analyse`, `RobotsCache`, `RateLimiter`.
 - Produces:
-  - `@dataclass JobConfig(source:str, limit:int, keyword:str, country:str, delay:float, concurrency:int, only_confirmed:bool, urlscan_key, publicwww_key)`
-  - `async def run_job(recipe, config:JobConfig, *, discover_fn=discover, fetch_fn=fetch, robots=None) -> AsyncIterator[dict]` — yields events: `{"type":"progress",...}`, `{"type":"lead", "lead":{...}}`, `{"type":"done", ...}`. `fetch_fn(url)->(final_url, html)`.
+  - `@dataclass JobConfig(source:str, limit:int, keyword:str, country:str, delay:float, concurrency:int, only_confirmed:bool, urlscan_key, publicwww_key, manual_hosts:list[str]=[])` — when `manual_hosts` is non-empty, discovery is bypassed and those hosts are verified directly.
+  - `async def run_job(recipe, config:JobConfig, *, discover_fn=discover_meta, fetch_fn=fetch, robots=None) -> AsyncIterator[dict]` — `discover_fn(recipe, **kwargs) -> {"query","raw_count","hosts"}`. Yields events: `{"type":"progress", "checked","total","confirmed","current_host","query","raw_candidates","log"}`, `{"type":"lead", "lead":{...}}`, `{"type":"done", "checked","confirmed","raw_candidates","query","totals"}`. `fetch_fn(url)->(final_url, html)`. The FIRST progress event always carries `query` (exact discovery query, or `"(manual domain list)"`) and `raw_candidates` (count from source before dedup, or len(manual_hosts)) so the UI can distinguish "0 candidates found" from "N found, 0 confirmed".
   - `def lead_to_row(lead:LeadData, recipe, source_query:str) -> dict` — column-keyed dict for export/table.
 
 - [ ] **Step 1: Write failing test `tests/test_runner.py`**
@@ -1120,7 +1148,8 @@ PLAIN_HTML = "<html><title>Nope</title><body>nothing here</body></html>"
 
 
 def fake_discover(recipe, **kwargs):
-    return ["marios.com", "nothere.com"]
+    return {"query": "domain:fbgcdn.com", "raw_count": 2,
+            "hosts": ["marios.com", "nothere.com"]}
 
 
 def make_fetch():
@@ -1158,6 +1187,34 @@ def test_run_job_emits_progress_lead_and_done():
     leads = [e["lead"] for e in events if e["type"] == "lead"]
     confirmed = [l for l in leads if l["on_platform"] in (True, "Y")]
     assert any("marios.com" in l["website"] for l in confirmed)
+    # first progress event surfaces the discovery query + raw candidate count
+    first = next(e for e in events if e["type"] == "progress")
+    assert first["query"] == "domain:fbgcdn.com"
+    assert first["raw_candidates"] == 2
+
+
+def test_manual_hosts_bypass_discovery():
+    def boom(recipe, **kwargs):
+        raise AssertionError("discovery must not run when manual_hosts set")
+
+    cfg = JobConfig(source="urlscan", limit=10, keyword="", country="",
+                    delay=0.0, concurrency=2, only_confirmed=True,
+                    urlscan_key=None, publicwww_key=None,
+                    manual_hosts=["marios.com"])
+
+    async def _run():
+        events = []
+        async for ev in run_job(GF, cfg, discover_fn=boom,
+                                fetch_fn=make_fetch(), robots=AllowAllRobots()):
+            events.append(ev)
+        return events
+
+    events = asyncio.run(_run())
+    first = next(e for e in events if e["type"] == "progress")
+    assert first["query"] == "(manual domain list)"
+    assert first["raw_candidates"] == 1
+    leads = [e["lead"] for e in events if e["type"] == "lead"]
+    assert any("marios.com" in l["website"] for l in leads)
 
 
 def test_only_confirmed_filters_unconfirmed():
@@ -1191,10 +1248,10 @@ Expected: FAIL (ModuleNotFoundError).
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import AsyncIterator
 
-from .discover import discover as _discover
+from .discover import discover_meta as _discover_meta
 from .enrich import analyse, fetch as _fetch, norm_url
 from .politeness import RobotsCache, RateLimiter
 
@@ -1210,6 +1267,7 @@ class JobConfig:
     only_confirmed: bool = True
     urlscan_key: str | None = None
     publicwww_key: str | None = None
+    manual_hosts: list = field(default_factory=list)
 
 
 def lead_to_row(lead, recipe, source_query: str) -> dict:
@@ -1233,20 +1291,28 @@ def lead_to_row(lead, recipe, source_query: str) -> dict:
     }
 
 
-async def run_job(recipe, config: JobConfig, *, discover_fn=_discover,
+async def run_job(recipe, config: JobConfig, *, discover_fn=_discover_meta,
                   fetch_fn=_fetch, robots=None) -> AsyncIterator[dict]:
     robots = robots if robots is not None else RobotsCache()
     limiter = RateLimiter(config.delay)
 
-    source_query = (recipe.urlscan_query if config.source == "urlscan"
-                    else recipe.publicwww_query)
-
-    hosts = discover_fn(recipe, source=config.source, limit=config.limit,
-                        keyword=config.keyword, urlscan_key=config.urlscan_key,
-                        publicwww_key=config.publicwww_key)
+    if config.manual_hosts:
+        query = "(manual domain list)"
+        raw_candidates = len(config.manual_hosts)
+        hosts = list(config.manual_hosts)
+    else:
+        meta = discover_fn(recipe, source=config.source, limit=config.limit,
+                           keyword=config.keyword, urlscan_key=config.urlscan_key,
+                           publicwww_key=config.publicwww_key)
+        query = meta["query"]
+        raw_candidates = meta["raw_count"]
+        hosts = meta["hosts"]
+    source_query = query
     total = len(hosts)
     yield {"type": "progress", "checked": 0, "total": total, "confirmed": 0,
-           "current_host": "", "log": f"Discovered {total} candidate hosts"}
+           "current_host": "", "query": query, "raw_candidates": raw_candidates,
+           "log": f"Discovered {raw_candidates} candidate(s) from source; "
+                  f"{total} to verify · query: {query}"}
 
     sem = asyncio.Semaphore(max(1, min(config.concurrency, 10)))
     state = {"checked": 0, "confirmed": 0}
@@ -1294,8 +1360,10 @@ async def run_job(recipe, config: JobConfig, *, discover_fn=_discover,
 
     await closer_task
     yield {"type": "done", "checked": state["checked"], "total": total,
-           "confirmed": state["confirmed"],
-           "totals": {"checked": state["checked"], "confirmed": state["confirmed"]}}
+           "confirmed": state["confirmed"], "query": query,
+           "raw_candidates": raw_candidates,
+           "totals": {"checked": state["checked"], "confirmed": state["confirmed"],
+                      "raw_candidates": raw_candidates, "query": query}}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1566,6 +1634,7 @@ class JobCreate(BaseModel):
     delay: float = 1.0
     concurrency: int = 5
     only_confirmed: bool = True
+    manual_hosts: list[str] = Field(default_factory=list)
     columns: list[str] = Field(default_factory=lambda: list(DEFAULT_COLUMNS))
 
 
@@ -1655,34 +1724,31 @@ def test_index_served():
     assert "Lead Scraper" in r.text
 
 
-def test_job_run_with_monkeypatched_engine(monkeypatch):
-    # Replace discover + fetch so the test never hits the network.
-    from app.engine import runner as runner_mod
-
-    def fake_discover(recipe, **kwargs):
-        return ["marios.com"]
-
+def test_job_run_with_manual_hosts():
+    # manual_hosts bypasses discovery; FETCH_OVERRIDE avoids the network entirely.
     def fake_fetch(url, **kwargs):
         return url, ('<html><title>Mario</title><body>'
                      '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script>'
                      '<a href="mailto:info@marios.com">e</a></body></html>')
 
-    monkeypatch.setattr(main, "discover", fake_discover)
-    monkeypatch.setattr(main, "fetch_fn", fake_fetch, raising=False)
     main.FETCH_OVERRIDE = fake_fetch
-
-    c = client()
-    rj = c.post("/api/jobs", json={"recipe_id": "gloriafood", "limit": 5,
-                                   "delay": 0.0, "only_confirmed": True})
-    job_id = rj.json()["job_id"]
-    # drain SSE
-    with c.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
-        body = "".join(chunk for chunk in resp.iter_text())
-    assert "done" in body
-    # now results downloadable
-    rx = c.get(f"/api/jobs/{job_id}/results.csv")
-    assert rx.status_code == 200
-    assert "marios.com" in rx.text
+    try:
+        c = client()
+        rj = c.post("/api/jobs", json={"recipe_id": "gloriafood",
+                                       "manual_hosts": ["marios.com"],
+                                       "delay": 0.0, "only_confirmed": True})
+        job_id = rj.json()["job_id"]
+        # drain SSE
+        with c.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
+            body = "".join(chunk for chunk in resp.iter_text())
+        assert "done" in body
+        assert "(manual domain list)" in body  # query surfaced
+        # results downloadable
+        rx = c.get(f"/api/jobs/{job_id}/results.csv")
+        assert rx.status_code == 200
+        assert "marios.com" in rx.text
+    finally:
+        main.FETCH_OVERRIDE = None
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1809,18 +1875,12 @@ def create_job(body: JobCreate):
         country=body.country, delay=body.delay,
         concurrency=min(body.concurrency, 10), only_confirmed=body.only_confirmed,
         urlscan_key=URLSCAN_KEY, publicwww_key=PUBLICWWW_KEY,
+        manual_hosts=[h.strip() for h in body.manual_hosts if h.strip()],
     )
     job_id = uuid.uuid4().hex
     JOBS[job_id] = {"recipe": recipe, "config": config, "columns": columns,
                     "rows": [], "status": "pending", "totals": {}}
     return {"job_id": job_id}
-
-
-def _discover_for(recipe, config):
-    # allow tests to monkeypatch module-level `discover`
-    return discover(recipe, source=config.source, limit=config.limit,
-                    keyword=config.keyword, urlscan_key=config.urlscan_key,
-                    publicwww_key=config.publicwww_key)
 
 
 @app.get("/api/jobs/{job_id}/stream")
@@ -1832,14 +1892,10 @@ async def stream_job(job_id: str):
     async def event_gen():
         job["status"] = "running"
         fetch_fn = FETCH_OVERRIDE or fetch
+        # run_job defaults discover_fn to discover_meta (real network); when the
+        # job carries manual_hosts, discovery is bypassed entirely.
         try:
             async for ev in run_job(job["recipe"], job["config"],
-                                    discover_fn=lambda r, **k: discover(
-                                        r, source=k.get("source"),
-                                        limit=k.get("limit"),
-                                        keyword=k.get("keyword", ""),
-                                        urlscan_key=k.get("urlscan_key"),
-                                        publicwww_key=k.get("publicwww_key")),
                                     fetch_fn=fetch_fn):
                 if ev["type"] == "lead":
                     job["rows"].append(ev["lead"])
@@ -1905,11 +1961,13 @@ def index():
     return JSONResponse({"detail": "UI not built"}, status_code=200)
 ```
 
-> Note for the implementer: the test monkeypatches `main.discover` and sets
-> `main.FETCH_OVERRIDE`. Ensure `discover` is referenced via the module global
-> (it is, above) and that the stream handler reads `FETCH_OVERRIDE` at call time
-> (it does). The lambda passed as `discover_fn` calls module-level `discover`, so
-> patching `main.discover` takes effect.
+> Note for the implementer: the API test avoids the network by (a) passing
+> `manual_hosts` so `run_job` bypasses discovery, and (b) setting
+> `main.FETCH_OVERRIDE` so `fetch` is never called. Ensure the stream handler
+> reads `FETCH_OVERRIDE` at call time (it does, via `FETCH_OVERRIDE or fetch`).
+> `discover`/`discover_urlscan`/`discover_publicwww` remain imported for the
+> `/api/recipes/test` endpoint. The `done` SSE frame includes the `query` and
+> `raw_candidates` fields produced by the runner.
 
 - [ ] **Step 4: Create placeholder `app/static/index.html`** (real UI in Task 11; needed for `test_index_served`)
 
@@ -2013,6 +2071,13 @@ git commit -m "feat(api): FastAPI routes, SSE, exports, recipe test"
           <label class="text-sm flex items-center gap-2">
             <input id="onlyConfirmed" type="checkbox" checked /> Only export confirmed leads
           </label>
+          <details class="text-sm">
+            <summary class="cursor-pointer text-slate-500">Manual domains (bypass discovery)</summary>
+            <textarea id="manualHosts" rows="3" class="mt-1 w-full border rounded-lg p-2 font-mono text-xs"
+              placeholder="one host per line, e.g.&#10;marios-pizza.com&#10;joes-diner.com"></textarea>
+            <p class="text-xs text-slate-400 mt-1">If filled, discovery is skipped and only these
+              hosts are verified/enriched — useful for validating the engine on known sites.</p>
+          </details>
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-2">
@@ -2175,6 +2240,8 @@ async function runJob() {
   $("dlXlsx").disabled = true;
   $("dlCsv").disabled = true;
 
+  const manualHosts = ($("manualHosts").value || "")
+    .split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
   const body = {
     recipe_id: $("type").value,
     source: $("source").value,
@@ -2184,6 +2251,7 @@ async function runJob() {
     delay: parseFloat($("delay").value),
     concurrency: parseInt($("concurrency").value, 10),
     only_confirmed: $("onlyConfirmed").checked,
+    manual_hosts: manualHosts,
     columns: selectedColumns(),
   };
   const res = await fetch("/api/jobs", {
@@ -2193,9 +2261,13 @@ async function runJob() {
   const { job_id } = await res.json();
   currentJob = job_id;
 
+  let lastQuery = "";
+  let rawCandidates = null;
   const es = new EventSource(`/api/jobs/${job_id}/stream`);
   es.addEventListener("progress", (e) => {
     const d = JSON.parse(e.data);
+    if (d.query !== undefined) lastQuery = d.query;
+    if (d.raw_candidates !== undefined) rawCandidates = d.raw_candidates;
     const pct = d.total ? Math.round((d.checked / d.total) * 100) : 0;
     $("bar").style.width = pct + "%";
     $("summary").textContent = `${d.checked}/${d.total} checked · ${d.confirmed} confirmed`;
@@ -2204,7 +2276,18 @@ async function runJob() {
   es.addEventListener("lead", (e) => addRow(JSON.parse(e.data).lead));
   es.addEventListener("done", (e) => {
     const d = JSON.parse(e.data);
-    $("summary").textContent = `Done — ${d.checked} checked, ${d.confirmed} confirmed.`;
+    const raw = d.raw_candidates ?? rawCandidates ?? d.total;
+    const q = d.query || lastQuery;
+    let msg;
+    if (raw === 0) {
+      // discovery genuinely returned nothing — NOT an engine failure
+      msg = `0 candidates found for query: ${q}. Try a different source, keyword, or manual domains.`;
+    } else if (d.confirmed === 0) {
+      msg = `${raw} candidate(s) found, ${d.checked} checked, 0 confirmed on platform (query: ${q}).`;
+    } else {
+      msg = `Done — ${raw} candidate(s), ${d.checked} checked, ${d.confirmed} confirmed (query: ${q}).`;
+    }
+    $("summary").textContent = msg;
     $("dlXlsx").disabled = false;
     $("dlCsv").disabled = false;
     es.close();
@@ -2314,17 +2397,56 @@ The Status column lets the sheet double as an outreach tracker.
 Run: `.venv/Scripts/python -m pytest -q`
 Expected: all tests PASS.
 
-- [ ] **Step 3: Manual smoke run (real network, acceptance test)**
+- [ ] **Step 3: Engine validation via MANUAL domains (no discovery, no urlscan)**
 
-Run: `.venv/Scripts/python -m uvicorn app.main:app` then in a browser:
-1. Category "Online Ordering / Restaurants" → Type "GloriaFood", source "urlscan (free)", set Max results to 50, click Run.
-2. Watch the progress bar + log; confirmed leads appear in the table.
-3. Click Download .xlsx — confirm the file opens with a `GloriaFood Prospects` tab.
-4. Click "+ Custom recipe", create Calendly (`assets.calendly.com`), accept the test result, run it.
+This isolates the verify/enrich half so a thin urlscan index can't be mistaken
+for an engine bug. Start the server: `.venv/Scripts/python -m uvicorn app.main:app`.
+In the browser, Type "GloriaFood", expand **Manual domains (bypass discovery)**, and
+paste 5–10 hand-picked domains known to run GloriaFood (the human partner supplies
+these). Click Run.
 
-Expected: progress streams, at least some confirmed leads appear (volume varies with urlscan's index), xlsx downloads. If urlscan returns 0 hosts, the summary shows "0 checked" cleanly (not an error).
+Expected: the summary reads `(manual domain list)` as the query, every pasted host is
+checked, and the confirmed ones show a Y chip with emails/phones. Download .xlsx and
+confirm the `GloriaFood Prospects` tab. This proves fetch + analyse + extract + export
+work independently of discovery.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Verify the candidate-accounting distinction**
+
+Confirm the UI shows two genuinely different end states:
+- A query with no index hits → summary `0 candidates found for query: …` (not an error/empty hang).
+- A run with hits but none matching → summary `N candidate(s) found, … 0 confirmed`.
+Use a deliberately obscure custom fingerprint to force the first case if needed.
+
+- [ ] **Step 5: HOLD — live urlscan discovery run (requires human GO)**
+
+⚠️ Do NOT run this step until the human partner explicitly says go. Then:
+1. Category "Online Ordering / Restaurants" → Type "GloriaFood", source "urlscan (free)",
+   Max results 25, Run. Watch progress; note the surfaced query + raw candidate count.
+2. Click "+ Custom recipe", create Calendly (`assets.calendly.com`), accept the test
+   result, run it.
+
+Expected: progress streams; the summary distinguishes "0 candidates" from "found, none
+confirmed"; xlsx downloads.
+
+- [ ] **Step 6: HOLD — ground-truth parity vs the original script (requires the original `gloriafood_finder.py`)**
+
+⚠️ Requires the human partner to place their original `gloriafood_finder.py` in the repo
+(it is NOT present in this workspace — see spec §11). Then run BOTH at limit ~25 over the
+same urlscan query and diff the **confirmed-domain sets**:
+
+```bash
+# original script — export confirmed GloriaFood domains to a sorted list
+.venv/Scripts/python gloriafood_finder.py discover --limit 25 > original_hosts.txt
+# new tool — run GloriaFood at limit 25, download results.csv, extract confirmed websites
+# (use the UI or call POST /api/jobs then GET results.csv), then:
+#   compare the set of confirmed website hosts from each, sorted
+```
+
+Acceptance: the two confirmed-domain sets match (allowing for ordering and urlscan index
+drift between the two runs — re-run close together). A mismatch beyond index drift means
+the port diverged; investigate fingerprints/normalization before declaring parity.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add README.md
@@ -2347,7 +2469,10 @@ git commit -m "docs: README + run instructions"
 - 4-step wizard UI + live progress + streaming table + downloads + disclaimer → Task 11 ✓
 - Selectable output columns → Task 9 (DEFAULT_COLUMNS) + Task 11 ✓
 - README + .env.example → Task 1 + Task 12 ✓
-- Acceptance test (GloriaFood end-to-end + Calendly custom) → Task 12 Step 3 ✓
+- Acceptance test (GloriaFood end-to-end + Calendly custom) → Task 12 Step 5 ✓
+- Manual-domain bypass (verify/enrich without discovery) → Task 7 (`manual_hosts`) + Task 10 (`JobCreate.manual_hosts`) + Task 11 (textarea) + Task 12 Step 3 ✓
+- Candidate accounting (surface query + raw count; distinguish "0 candidates" vs "found, 0 confirmed") → Task 4 (`discover_meta`) + Task 7 (progress/done events) + Task 11 (summary logic) + Task 12 Step 4 ✓
+- Live run held for explicit go + ground-truth parity vs original script → Task 12 Steps 5–6 ✓
 
 **Deferred (documented in spec §10):** rich Jobs/History screen, per-recipe logos, full Settings page. Jobs are persisted in-process for the session; a `Job`/`Lead` DB-persistence pass and history UI are a follow-up plan.
 
