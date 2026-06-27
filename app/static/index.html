@@ -1,2 +1,127 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Lead Scraper</title></head>
-<body><h1>Lead Scraper</h1></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lead Scraper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="hidden md:flex w-56 flex-col bg-white border-r border-slate-200 p-4">
+      <div class="text-lg font-semibold text-emerald-600 mb-6">Lead Scraper</div>
+      <nav class="space-y-1 text-sm">
+        <a class="block px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 font-medium">Search</a>
+        <a class="block px-3 py-2 rounded-lg text-slate-500">Jobs</a>
+        <a class="block px-3 py-2 rounded-lg text-slate-500">Recipes</a>
+        <a class="block px-3 py-2 rounded-lg text-slate-500">Settings</a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <!-- Config wizard -->
+      <section class="lg:col-span-2 space-y-4">
+        <h1 class="text-xl font-semibold">Find leads</h1>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+          <h2 class="font-medium">1 · What to find</h2>
+          <label class="block text-sm">Category
+            <select id="category" class="mt-1 w-full border rounded-lg p-2"></select>
+          </label>
+          <label class="block text-sm">Type
+            <select id="type" class="mt-1 w-full border rounded-lg p-2"></select>
+          </label>
+          <button id="customBtn" class="text-emerald-600 text-sm underline">+ Custom recipe</button>
+          <div id="fingerprints" class="text-xs text-slate-500"></div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+          <h2 class="font-medium">2 · Where / filters</h2>
+          <label class="block text-sm">Discovery source
+            <select id="source" class="mt-1 w-full border rounded-lg p-2">
+              <option value="urlscan">urlscan.io (free)</option>
+              <option value="publicwww">PublicWWW (needs key)</option>
+            </select>
+          </label>
+          <label class="block text-sm">Country / region (optional)
+            <input id="country" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g. US" />
+          </label>
+          <label class="block text-sm">Vertical / keyword (optional)
+            <input id="keyword" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g. pizza" />
+          </label>
+          <label class="block text-sm">Max results: <span id="limitVal">200</span>
+            <input id="limit" type="range" min="10" max="1000" value="200" class="w-full" />
+          </label>
+          <div class="flex gap-3">
+            <label class="text-sm flex-1">Delay (s)
+              <input id="delay" type="number" step="0.5" value="1.0" class="mt-1 w-full border rounded-lg p-2" />
+            </label>
+            <label class="text-sm flex-1">Concurrency
+              <input id="concurrency" type="number" min="1" max="10" value="5" class="mt-1 w-full border rounded-lg p-2" />
+            </label>
+          </div>
+          <label class="text-sm flex items-center gap-2">
+            <input id="onlyConfirmed" type="checkbox" checked /> Only export confirmed leads
+          </label>
+          <details class="text-sm">
+            <summary class="cursor-pointer text-slate-500">Manual domains (bypass discovery)</summary>
+            <textarea id="manualHosts" rows="3" class="mt-1 w-full border rounded-lg p-2 font-mono text-xs"
+              placeholder="one host per line, e.g.&#10;marios-pizza.com&#10;joes-diner.com"></textarea>
+            <p class="text-xs text-slate-400 mt-1">If filled, discovery is skipped and only these
+              hosts are verified/enriched — useful for validating the engine on known sites.</p>
+          </details>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-2">
+          <h2 class="font-medium">3 · Fields to extract</h2>
+          <div id="columns" class="grid grid-cols-2 gap-1 text-xs"></div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+          <h2 class="font-medium">4 · Run</h2>
+          <p class="text-xs text-slate-500">You are responsible for complying with the data
+            sources' Terms of Service (urlscan, PublicWWW) and applicable law (GDPR/CAN-SPAM)
+            when contacting leads. Only publicly published contact info is collected.</p>
+          <button id="runBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 font-medium">Run</button>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="lg:col-span-3 space-y-4">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="font-medium">Results</h2>
+            <div class="space-x-2">
+              <button id="dlXlsx" disabled class="text-sm px-3 py-1 rounded-lg border disabled:opacity-40">Download .xlsx</button>
+              <button id="dlCsv" disabled class="text-sm px-3 py-1 rounded-lg border disabled:opacity-40">Download .csv</button>
+            </div>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2 mb-2">
+            <div id="bar" class="bg-emerald-500 h-2 rounded-full" style="width:0%"></div>
+          </div>
+          <div id="summary" class="text-sm text-slate-600 mb-2">Idle.</div>
+          <div class="overflow-auto max-h-[45vh] border rounded-lg">
+            <table class="w-full text-xs">
+              <thead class="bg-slate-100 sticky top-0">
+                <tr>
+                  <th class="text-left p-2">Confirmed</th>
+                  <th class="text-left p-2">Name</th>
+                  <th class="text-left p-2">Website</th>
+                  <th class="text-left p-2">Email</th>
+                  <th class="text-left p-2">Phone</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="bg-slate-900 text-emerald-300 rounded-xl p-3 font-mono text-xs h-40 overflow-auto" id="log"></div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

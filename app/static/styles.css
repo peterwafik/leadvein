@@ -1,0 +1,4 @@
+/* small supplements to Tailwind CDN */
+body { font-family: Inter, system-ui, -apple-system, sans-serif; }
+#log::-webkit-scrollbar { width: 8px; }
+#log::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
