@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import io
 import json
 import os
 import uuid
@@ -15,11 +13,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 
 from app.db import init_db, seed_builtins, all_recipes, Recipe
-from app.engine.discover import discover, discover_urlscan, discover_publicwww
+from app.engine.discover import discover
 from app.engine.enrich import fetch, analyse, norm_url
 from app.engine.export import rows_to_csv, rows_to_xlsx, append_xlsx
-from app.engine.recipes import recipes_by_category
-from app.engine.runner import run_job, JobConfig, lead_to_row
+from app.engine.runner import run_job, JobConfig
 from app.schemas import (RecipeCreate, TestRecipeRequest, JobCreate,
                          engine_recipe_from_api, DEFAULT_COLUMNS)
 
@@ -90,15 +87,19 @@ def test_recipe(body: TestRecipeRequest):
     samples = []
     matched = 0
     for h in hosts:
-        final_url, html = fetch_fn(norm_url(h))
-        if not html:
-            samples.append({"host": h, "confirmed": False, "matched": ""})
-            continue
-        lead = analyse(recipe, final_url or h, html)
-        if lead.on_platform:
-            matched += 1
-        samples.append({"host": h, "confirmed": lead.on_platform,
-                        "matched": lead.matched})
+        try:
+            final_url, html = fetch_fn(norm_url(h))
+            if not html:
+                samples.append({"host": h, "confirmed": False, "matched": ""})
+                continue
+            lead = analyse(recipe, final_url or h, html)
+            if lead.on_platform:
+                matched += 1
+            samples.append({"host": h, "confirmed": lead.on_platform,
+                            "matched": lead.matched})
+        except Exception as e:
+            samples.append({"host": h, "confirmed": False, "matched": "",
+                            "error": str(e)})
     return {"checked": len(hosts), "matched": matched, "samples": samples}
 
 
@@ -127,6 +128,8 @@ async def stream_job(job_id: str):
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(404, "job not found")
+    if job["status"] != "pending":
+        raise HTTPException(409, "job already started or completed")
 
     async def event_gen():
         job["status"] = "running"
@@ -143,9 +146,12 @@ async def stream_job(job_id: str):
                     job["totals"] = ev["totals"]
                 yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
         except Exception as e:  # surface engine errors to the client
+            job["status"] = "error"
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    return StreamingResponse(event_gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
 
 
 def _job_rows(job_id: str):

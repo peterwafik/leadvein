@@ -57,3 +57,37 @@ def test_job_run_with_manual_hosts():
         assert "marios.com" in rx.text
     finally:
         main.FETCH_OVERRIDE = None
+
+
+def test_recipe_test_survives_enrich_error(monkeypatch):
+    monkeypatch.setattr(main, "discover", lambda recipe, **k: ["x.com"])
+    def boom(url, **kwargs):
+        raise RuntimeError("net down")
+    main.FETCH_OVERRIDE = boom
+    try:
+        c = client()
+        r = c.post("/api/recipes/test", json={"urlscan_query": "domain:x.com",
+                   "verify_fingerprints": ["x.com"], "source": "urlscan"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["checked"] == 1
+        assert data["matched"] == 0
+    finally:
+        main.FETCH_OVERRIDE = None
+
+
+def test_restream_completed_job_returns_409():
+    def fake_fetch(url, **kwargs):
+        return url, "<html><title>x</title></html>"
+    main.FETCH_OVERRIDE = fake_fetch
+    try:
+        c = client()
+        job_id = c.post("/api/jobs", json={"recipe_id": "gloriafood",
+                        "manual_hosts": ["marios.com"], "delay": 0.0,
+                        "only_confirmed": False}).json()["job_id"]
+        with c.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
+            "".join(resp.iter_text())
+        r2 = c.get(f"/api/jobs/{job_id}/stream")
+        assert r2.status_code == 409
+    finally:
+        main.FETCH_OVERRIDE = None
