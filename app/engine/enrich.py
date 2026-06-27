@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from urllib.parse import unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -13,6 +14,17 @@ IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico")
 TRACKING_TOKENS = ("fbgcdn", "sentry", "wixpress", "cloudflare", "gstatic",
                    "googleapis", "w3.org", "schema.org", "example.com",
                    "sentry.io", "cloudfront")
+
+PLACEHOLDER_EMAILS = {
+    "user@domain.com", "name@domain.com", "email@domain.com",
+    "name@email.com", "you@email.com", "email@example.com",
+    "you@example.com", "yourname@example.com", "example@example.com",
+    "john@doe.com", "johndoe@example.com", "firstname.lastname@example.com",
+}
+PLACEHOLDER_DOMAINS = {
+    "domain.com", "example.com", "example.org", "example.net",
+    "email.com", "yourdomain.com", "yourcompany.com", "company.com",
+}
 
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 PHONE_RE = re.compile(r"\+?\d[\d\s().\-]{7,}\d")
@@ -56,6 +68,11 @@ def _clean_emails(candidates: list[str]) -> list[str]:
             continue
         if any(tok in low for tok in TRACKING_TOKENS):
             continue
+        if e in PLACEHOLDER_EMAILS:
+            continue
+        domain = e.split("@")[-1]
+        if domain in PLACEHOLDER_DOMAINS:
+            continue
         if e and e not in out:
             out.append(e)
     return out
@@ -97,7 +114,8 @@ def analyse(recipe, url: str, html: str) -> LeadData:
     phones: list[str] = []
     for a in soup.find_all("a", href=True):
         if a["href"].lower().startswith("tel:"):
-            p = a["href"][4:].strip()
+            p = unquote(a["href"][4:]).strip()
+            p = " ".join(p.split())  # collapse any runs of whitespace
             if p and p not in phones:
                 phones.append(p)
     if not phones:

@@ -77,3 +77,28 @@ def test_analyse_extractor_without_capture_group_is_safe():
     lead = analyse(rec, "https://marios.com/", SAMPLE_HTML)
     assert lead.on_platform is True
     assert "bad" not in lead.ids   # gracefully skipped, no crash
+
+
+def test_analyse_decodes_url_encoded_tel():
+    from app.engine.recipes import get_builtin
+    gf = get_builtin("gloriafood")
+    html = ('<html><title>x</title><body>'
+            '<a href="tel:0492%20432%20124">call</a>'
+            '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script>'
+            '</body></html>')
+    lead = analyse(gf, "https://x.com/", html)
+    assert "0492 432 124" in lead.phones
+    assert not any("%20" in p for p in lead.phones)
+
+
+def test_analyse_filters_placeholder_emails():
+    from app.engine.recipes import get_builtin
+    gf = get_builtin("gloriafood")
+    html = ('<html><title>x</title><body>'
+            'contact user@domain.com or hi@mydomain.com or real@goodbiz.co.uk'
+            '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script>'
+            '</body></html>')
+    lead = analyse(gf, "https://x.com/", html)
+    assert "user@domain.com" not in lead.emails        # placeholder dropped
+    assert "hi@mydomain.com" in lead.emails             # real domain NOT over-filtered
+    assert "real@goodbiz.co.uk" in lead.emails
