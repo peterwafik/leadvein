@@ -66,3 +66,14 @@ def test_analyse_not_confirmed_when_absent():
     lead = analyse(GF, "https://x.com/", "<html><title>x</title></html>")
     assert lead.on_platform is False
     assert lead.matched == ""
+
+
+def test_analyse_extractor_without_capture_group_is_safe():
+    from app.engine.recipes import Recipe
+    # extractor pattern with NO capture group must not raise
+    rec = Recipe(id="c", category="Custom", type="C",
+                 verify_fingerprints=["marios"],
+                 id_extractors={"bad": r"data-glf-ruid"})
+    lead = analyse(rec, "https://marios.com/", SAMPLE_HTML)
+    assert lead.on_platform is True
+    assert "bad" not in lead.ids   # gracefully skipped, no crash

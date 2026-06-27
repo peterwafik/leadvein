@@ -72,12 +72,46 @@ function chip(confirmed) {
 function addRow(lead) {
   const tr = document.createElement("tr");
   tr.className = "border-t";
-  tr.innerHTML =
-    `<td class="p-2">${chip(lead.on_platform)}</td>` +
-    `<td class="p-2">${lead.name || ""}</td>` +
-    `<td class="p-2"><a class="text-emerald-600 underline" href="${lead.website}" target="_blank">${lead.website}</a></td>` +
-    `<td class="p-2">${lead.email || ""}</td>` +
-    `<td class="p-2">${lead.phone || ""}</td>`;
+
+  // Confirmed cell — chip() returns a fixed string based on a boolean; safe.
+  const tdConfirmed = document.createElement("td");
+  tdConfirmed.className = "p-2";
+  tdConfirmed.innerHTML = chip(lead.on_platform);
+  tr.appendChild(tdConfirmed);
+
+  // Name cell
+  const tdName = document.createElement("td");
+  tdName.className = "p-2";
+  tdName.textContent = lead.name || "";
+  tr.appendChild(tdName);
+
+  // Website cell — only allow http/https hrefs to prevent javascript: injection
+  const tdWebsite = document.createElement("td");
+  tdWebsite.className = "p-2";
+  const a = document.createElement("a");
+  a.className = "text-emerald-600 underline";
+  a.textContent = lead.website || "";
+  a.rel = "noopener noreferrer";
+  a.target = "_blank";
+  const ws = lead.website || "";
+  if (ws.startsWith("http://") || ws.startsWith("https://")) {
+    a.href = ws;
+  }
+  tdWebsite.appendChild(a);
+  tr.appendChild(tdWebsite);
+
+  // Email cell
+  const tdEmail = document.createElement("td");
+  tdEmail.className = "p-2";
+  tdEmail.textContent = lead.email || "";
+  tr.appendChild(tdEmail);
+
+  // Phone cell
+  const tdPhone = document.createElement("td");
+  tdPhone.className = "p-2";
+  tdPhone.textContent = lead.phone || "";
+  tr.appendChild(tdPhone);
+
   $("rows").appendChild(tr);
 }
 

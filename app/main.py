@@ -40,7 +40,7 @@ def _recipe_dict(recipe_id: str) -> dict | None:
         if not r:
             return None
         return {
-            "id": r.id, "category": r.category, "type": r.type,
+            "id": r.id, "category": r.category, "type": r.type, "logo": r.logo,
             "urlscan_query": r.urlscan_query, "publicwww_query": r.publicwww_query,
             "verify_fingerprints": json.loads(r.fingerprints_json or "[]"),
             "id_extractors": json.loads(r.extractors_json or "{}"),

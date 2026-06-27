@@ -110,9 +110,12 @@ def analyse(recipe, url: str, html: str) -> LeadData:
     lead.phones = phones[:5]
 
     for label, pattern in recipe.id_extractors.items():
-        m = re.search(pattern, html)
-        if m:
-            lead.ids[label] = m.group(1)
+        try:
+            m = re.search(pattern, html)
+            if m and m.groups():
+                lead.ids[label] = m.group(1)
+        except re.error:
+            continue
 
     for name, host in SOCIAL_HOSTS.items():
         for a in soup.find_all("a", href=True):
