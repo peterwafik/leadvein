@@ -63,7 +63,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             score_total=scored["total"], subscores_json=json.dumps(scored["subscores"]),
             score_explanation=scored["explanation"],
             scoring_profile_key=scoring_profile_key,
-            source_key=n.source_key, source_name=adapter.meta.name,
+            source_key=n.source_key or adapter.meta.key, source_name=adapter.meta.name,
             source_url=n.source_url or adapter.meta.url,
             source_license=n.source_license or adapter.meta.license,
             date_last_verified=_now(), dedupe_key=key))

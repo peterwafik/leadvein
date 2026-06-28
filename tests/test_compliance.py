@@ -29,6 +29,25 @@ def test_opt_out_and_suppression():
         assert is_suppressed(s, 9, domain="mine.com") is False    # other buyer
 
 
+def test_optout_and_suppression_normalize_values():
+    from sqlmodel import Session
+    from app.core.db import (init_db, OptOutRequest, SuppressionList, SuppressionEntry)
+    from app.core.compliance import is_opted_out, is_suppressed
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        s.add(OptOutRequest(kind="domain", value="www.OptOut.com", applied=True))
+        s.add(OptOutRequest(kind="phone", value="+44 123 456 789", applied=True))
+        gl = SuppressionList(buyer_account_id=None, name="g"); s.add(gl); s.commit(); s.refresh(gl)
+        s.add(SuppressionEntry(list_id=gl.id, kind="email", value="Sales@Biz.com"))
+        s.commit()
+        # domain opt-out stored with www + caps matches a bare lowercase host
+        assert is_opted_out(s, domain="optout.com") is True
+        # phone opt-out matches differently-formatted number (digits compared)
+        assert is_opted_out(s, phone="+44123456789") is True
+        # email suppression matches case-insensitively
+        assert is_suppressed(s, 5, email="sales@biz.com") is True
+
+
 def test_audit_writes_row():
     engine = init_db("sqlite://")
     with Session(engine) as s:

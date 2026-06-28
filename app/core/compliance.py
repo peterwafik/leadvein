@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from urllib.parse import urlsplit
 
 from sqlmodel import Session, select
@@ -16,17 +17,29 @@ def host_of(url: str) -> str:
     return netloc[4:] if netloc.startswith("www.") else netloc
 
 
+def _norm(kind: str, value: str) -> str:
+    if kind == "domain":
+        return host_of(value)
+    if kind == "phone":
+        return re.sub(r"\D", "", value)
+    if kind in ("email", "business_name"):
+        return value.strip().lower()
+    return value.strip().lower()
+
+
 def is_opted_out(session: Session, *, domain: str = "", phone: str = "",
                  email: str = "") -> bool:
     checks = [("domain", domain), ("phone", phone), ("email", email)]
     for kind, value in checks:
         if not value:
             continue
-        hit = session.exec(select(OptOutRequest).where(
-            OptOutRequest.kind == kind, OptOutRequest.value == value,
-            OptOutRequest.applied == True)).first()  # noqa: E712
-        if hit:
-            return True
+        rows = session.exec(select(OptOutRequest).where(
+            OptOutRequest.kind == kind,
+            OptOutRequest.applied == True)).all()  # noqa: E712
+        norm_value = _norm(kind, value)
+        for stored in rows:
+            if _norm(kind, stored.value) == norm_value:
+                return True
     return False
 
 
@@ -43,11 +56,13 @@ def is_suppressed(session: Session, buyer_account_id: int | None, *, domain: str
     for kind, value in checks:
         if not value:
             continue
-        hit = session.exec(select(SuppressionEntry).where(
+        entries = session.exec(select(SuppressionEntry).where(
             SuppressionEntry.list_id.in_(list_ids),
-            SuppressionEntry.kind == kind, SuppressionEntry.value == value)).first()
-        if hit:
-            return True
+            SuppressionEntry.kind == kind)).all()
+        norm_value = _norm(kind, value)
+        for entry in entries:
+            if _norm(kind, entry.value) == norm_value:
+                return True
     return False
 
 
