@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<div class="max-w-sm mx-auto mt-20 bg-white p-6 rounded-xl border shadow-sm">
+  <div class="text-xl font-semibold text-emerald-600 mb-4">LeadVault</div>
+  {% if error %}<p class="text-red-600 text-sm mb-2">{{ error }}</p>{% endif %}
+  <form method="post" action="/login" class="space-y-3">
+    <input name="email" type="email" placeholder="Email" class="w-full border rounded-lg p-2" required>
+    <input name="password" type="password" placeholder="Password" class="w-full border rounded-lg p-2" required>
+    <button class="w-full bg-emerald-600 text-white rounded-lg py-2">Log in</button>
+  </form>
+  <p class="text-xs text-slate-500 mt-3">No account? <a href="/register" class="text-emerald-600 underline">Register</a></p>
+</div>{% endblock %}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LeadVault{% block title %}{% endblock %}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div class="flex min-h-screen">
+  {% if user %}
+  <aside class="hidden md:flex w-56 flex-col bg-white border-r border-slate-200 p-4">
+    <div class="text-lg font-semibold text-emerald-600 mb-6">LeadVault</div>
+    <nav class="space-y-1 text-sm">
+      {% if user.role == 'admin' %}
+        <a href="/admin" class="block px-3 py-2 rounded-lg text-slate-600">Admin Overview</a>
+        <a href="/admin/ingest" class="block px-3 py-2 rounded-lg text-slate-600">Ingestion</a>
+        <a href="/admin/leads" class="block px-3 py-2 rounded-lg text-slate-600">Leads</a>
+        <a href="/admin/sources" class="block px-3 py-2 rounded-lg text-slate-600">Sources</a>
+        <a href="/admin/categories" class="block px-3 py-2 rounded-lg text-slate-600">Categories</a>
+        <a href="/admin/optouts" class="block px-3 py-2 rounded-lg text-slate-600">Opt-outs</a>
+        <a href="/admin/audit" class="block px-3 py-2 rounded-lg text-slate-600">Audit Log</a>
+      {% else %}
+        <a href="/app" class="block px-3 py-2 rounded-lg text-slate-600">Dashboard</a>
+        <a href="/app/recipes" class="block px-3 py-2 rounded-lg text-slate-600">Lead Recipes</a>
+        <a href="/app/marketplace" class="block px-3 py-2 rounded-lg text-slate-600">Marketplace</a>
+        <a href="/app/purchased" class="block px-3 py-2 rounded-lg text-slate-600">Purchased Leads</a>
+        <a href="/app/suppression" class="block px-3 py-2 rounded-lg text-slate-600">Suppression</a>
+        <a href="/app/billing" class="block px-3 py-2 rounded-lg text-slate-600">Billing</a>
+      {% endif %}
+      <a href="/logout" class="block px-3 py-2 rounded-lg text-slate-400">Logout</a>
+    </nav>
+  </aside>
+  {% endif %}
+  <main class="flex-1 p-6">{% block body %}{% endblock %}</main>
+</div>
+</body></html>
