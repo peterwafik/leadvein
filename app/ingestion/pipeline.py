@@ -7,6 +7,7 @@ from sqlmodel import Session
 from app.adapters.base import AdapterQuery, NormalizedLead
 from app.core.compliance import host_of, is_opted_out, audit
 from app.core.db import Lead, IngestionJob, _now
+from app.core.retention import expiry_for
 from app.core.dedup import dedupe_key, find_existing
 from app.core.sources import ensure_source
 from app.enrich.website import enrich_website
@@ -67,7 +68,9 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             source_url=n.source_url or adapter.meta.url,
             source_license=n.source_license or adapter.meta.license,
             attribution=adapter.attribution(),
-            date_last_verified=_now(), dedupe_key=key)
+            date_last_verified=_now(),
+            retention_expiry=expiry_for(_now()),
+            dedupe_key=key)
         session.add(lead_obj)
         session.flush()  # assign lead_obj.id
         from app.core.leadcats import sync_lead_categories

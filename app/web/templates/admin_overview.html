@@ -8,4 +8,8 @@
   <label>Buyer account id<input name="buyer_account_id" type="number" class="mt-1 block border rounded-lg p-2"></label>
   <label>Credits<input name="amount" type="number" class="mt-1 block border rounded-lg p-2"></label>
   <button class="bg-emerald-600 text-white rounded-lg px-3 py-2">Grant credits</button>
-</form>{% endblock %}
+</form>
+<div class="bg-white p-4 rounded-xl border mt-4 text-sm">
+  <div class="mb-2"><b>{{ n_expired }}</b> leads past retention. Sold leads are retained.</div>
+  <form method="post" action="/admin/purge-expired"><button class="bg-red-600 text-white rounded-lg px-3 py-1">Purge expired (unsold)</button></form>
+</div>{% endblock %}

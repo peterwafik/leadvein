@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from app.core.compliance import audit, is_suppressed, is_opted_out, host_of
+from app.core.retention import is_expired
 from app.core.db import PurchasedLead, Lead
 from app.core.masking import unlock_view
 from app.engine.export import rows_to_csv
@@ -23,6 +24,8 @@ def export_purchased_csv(session: Session, user, columns: list[str] | None = Non
     for p in purchases:
         lead = session.get(Lead, p.lead_id)
         if lead is None:
+            continue
+        if is_expired(lead):
             continue
         if (is_opted_out(session, domain=host_of(lead.website_url), phone=lead.phone,
                          email=lead.public_email)

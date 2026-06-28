@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from app.adapters import registry as adapter_registry
 from app.adapters.base import AdapterQuery
 from app.core.compliance import audit, lead_opted_out
+from app.core.retention import purge_expired, expired_count
 from app.core.db import (Lead, LeadSource, AuditLog, OptOutRequest, IngestionJob,
                          BuyerAccount)
 from app.core.taxonomy import all_categories, upsert_category
@@ -33,8 +34,21 @@ def overview(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     n_leads = len(session.exec(select(Lead)).all())
     n_sources = len(session.exec(select(LeadSource)).all())
+    n_expired = expired_count(session)
     return templates.TemplateResponse("admin_overview.html", {
-        "request": request, "user": u, "n_leads": n_leads, "n_sources": n_sources})
+        "request": request, "user": u, "n_leads": n_leads, "n_sources": n_sources,
+        "n_expired": n_expired})
+
+
+@router.post("/purge-expired")
+def purge_expired_route(request: Request, session: Session = Depends(get_session)):
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    from app.core.compliance import audit
+    n = purge_expired(session)
+    audit(session, u.id, "purge_expired", "Lead", "*", {"removed": n})
+    return redirect("/admin")
 
 
 @router.get("/ingest")

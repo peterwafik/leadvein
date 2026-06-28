@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlmodel import Session
 
 from app.core.compliance import is_suppressed, host_of, lead_opted_out
+from app.core.retention import is_expired
 from app.core.masking import mask_preview, is_owned
 from app.core.recipes import matching_leads
 
@@ -18,6 +19,8 @@ def search(session: Session, buyer_account_id: int, filters: dict) -> list[dict]
     leads = matching_leads(session, filters)
     out = []
     for l in leads:
+        if is_expired(l):
+            continue
         if not _not_suppressed(session, buyer_account_id, l):
             continue
         if lead_opted_out(session, l):
