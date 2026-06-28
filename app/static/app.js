@@ -157,13 +157,17 @@ function logLine(msg) {
   el.scrollTop = el.scrollHeight;
 }
 
-async function runJob() {
+function resetResults() {
   $("rows").innerHTML = "";
   $("log").textContent = "";
   $("bar").style.width = "0%";
+  $("summary").textContent = "Running…";
   $("dlXlsx").disabled = true;
   $("dlCsv").disabled = true;
+}
 
+async function runJob() {
+  resetResults();
   const manualHosts = ($("manualHosts").value || "")
     .split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
   const body = {
@@ -183,8 +187,21 @@ async function runJob() {
     body: JSON.stringify(body),
   });
   const { job_id } = await res.json();
-  currentJob = job_id;
+  streamJob(job_id);
+}
 
+// Re-run a past job with its saved recipe + filters (server reconstructs them).
+async function rerunJob(oldId) {
+  showView("search");
+  resetResults();
+  const res = await fetch(`/api/jobs/${encodeURIComponent(oldId)}/rerun`, { method: "POST" });
+  if (!res.ok) { $("summary").textContent = "Re-run failed (original recipe missing?)."; return; }
+  const { job_id } = await res.json();
+  streamJob(job_id);
+}
+
+function streamJob(job_id) {
+  currentJob = job_id;
   let lastQuery = "";
   let rawCandidates = null;
   const es = new EventSource(`/api/jobs/${job_id}/stream`);
@@ -330,6 +347,16 @@ async function loadJobs() {
     dl.appendChild(dlLink(".xlsx", `/api/jobs/${id}/results.xlsx`));
     dl.appendChild(dlLink(".csv", `/api/jobs/${id}/results.csv`));
     tr.appendChild(dl);
+
+    const act = document.createElement("td");
+    act.className = "p-3";
+    const rerun = document.createElement("button");
+    rerun.className = "text-sm px-2 py-1 rounded-lg border hover:bg-slate-50";
+    rerun.textContent = "Re-run";
+    rerun.addEventListener("click", () => rerunJob(j.id));
+    act.appendChild(rerun);
+    tr.appendChild(act);
+
     tbody.appendChild(tr);
   });
 }

@@ -151,7 +151,7 @@ def create_job(body: JobCreate):
                "limit": config.limit, "delay": config.delay,
                "concurrency": config.concurrency,
                "only_confirmed": config.only_confirmed,
-               "manual_hosts": len(config.manual_hosts)}
+               "manual_hosts": config.manual_hosts}  # full list, for faithful re-run
     with Session(engine) as s:
         s.add(Job(id=job_id, recipe_id=body.recipe_id, source=body.source,
                   filters_json=json.dumps(filters), columns_json=json.dumps(columns),
@@ -259,16 +259,44 @@ def list_jobs():
         out = []
         for j in jobs:
             n = len(s.exec(select(Lead.id).where(Lead.job_id == j.id)).all())
+            flt = json.loads(j.filters_json or "{}")
+            if isinstance(flt.get("manual_hosts"), list):  # keep response lean
+                flt["manual_hosts"] = len(flt["manual_hosts"])
             out.append({
                 "id": j.id, "recipe_id": j.recipe_id,
                 "type": recipe_types.get(j.recipe_id, j.recipe_id),
                 "source": j.source, "status": j.status,
                 "created_at": j.created_at,
                 "totals": json.loads(j.totals_json or "{}"),
-                "filters": json.loads(j.filters_json or "{}"),
+                "filters": flt,
                 "lead_count": n,
             })
     return {"jobs": out}
+
+
+@app.post("/api/jobs/{job_id}/rerun")
+def rerun_job(job_id: str):
+    with Session(engine) as s:
+        old = s.get(Job, job_id)
+        if not old:
+            raise HTTPException(404, "job not found")
+        filters = json.loads(old.filters_json or "{}")
+        columns = json.loads(old.columns_json or "[]") or list(DEFAULT_COLUMNS)
+        recipe_id, source = old.recipe_id, old.source
+    if not _recipe_dict(recipe_id):
+        raise HTTPException(400, "original recipe no longer exists")
+    mh = filters.get("manual_hosts") or []
+    if not isinstance(mh, list):
+        mh = []
+    new = JobCreate(
+        recipe_id=recipe_id, source=source,
+        keyword=filters.get("keyword", ""), country=filters.get("country", ""),
+        limit=int(filters.get("limit", 200)), delay=float(filters.get("delay", 1.0)),
+        concurrency=int(filters.get("concurrency", 5)),
+        only_confirmed=bool(filters.get("only_confirmed", True)),
+        manual_hosts=mh, columns=columns,
+    )
+    return create_job(new)  # creates + persists a fresh job, returns {job_id}
 
 
 @app.get("/api/jobs/{job_id}/results.csv")

@@ -156,6 +156,40 @@ def test_job_results_persist_in_db_after_runtime_evicted():
         main.FETCH_OVERRIDE = None
 
 
+def test_rerun_creates_new_job_with_preserved_filters():
+    def fake_fetch(url, **kwargs):
+        return url, ('<html><title>Mario</title><body>'
+                     '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script>'
+                     '<a href="mailto:info@marios.com">e</a></body></html>')
+
+    main.FETCH_OVERRIDE = fake_fetch
+    try:
+        c = client()
+        first = c.post("/api/jobs", json={"recipe_id": "gloriafood",
+                       "manual_hosts": ["marios.com"], "delay": 0.0,
+                       "only_confirmed": True}).json()["job_id"]
+        with c.stream("GET", f"/api/jobs/{first}/stream") as resp:
+            "".join(resp.iter_text())
+        # re-run from history
+        rr = c.post(f"/api/jobs/{first}/rerun")
+        assert rr.status_code == 200
+        second = rr.json()["job_id"]
+        assert second != first
+        with c.stream("GET", f"/api/jobs/{second}/stream") as resp:
+            body = "".join(resp.iter_text())
+        # manual_hosts were faithfully restored -> discovery bypassed again
+        assert "(manual domain list)" in body
+        assert "marios.com" in c.get(f"/api/jobs/{second}/results.csv").text
+        ids = [j["id"] for j in c.get("/api/jobs").json()["jobs"]]
+        assert first in ids and second in ids
+    finally:
+        main.FETCH_OVERRIDE = None
+
+
+def test_rerun_missing_job_returns_404():
+    assert client().post("/api/jobs/nope/rerun").status_code == 404
+
+
 def test_restream_completed_job_returns_409():
     def fake_fetch(url, **kwargs):
         return url, "<html><title>x</title></html>"
