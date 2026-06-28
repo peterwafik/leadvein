@@ -7,7 +7,8 @@ def test_expanded_catalog_breadth_and_unique_ids():
     ids = [r.id for r in BUILTIN_RECIPES]
     assert len(ids) == len(set(ids))  # ids unique
     for expected in ["mailchimp", "klaviyo", "trustpilot", "typeform",
-                     "zendesk", "gtm", "square", "hotjar", "ecwid", "weebly"]:
+                     "zendesk", "gtm", "square", "hotjar", "ecwid", "weebly",
+                     "gocardless", "affirm", "mollie", "clearpay"]:
         assert expected in ids
     cats = {r.category for r in BUILTIN_RECIPES}
     for c in ["Analytics / Tag Managers", "Email / CRM Marketing",

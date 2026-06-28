@@ -243,6 +243,29 @@ BUILTIN_RECIPES: list[Recipe] = [
     _r(id="authorizenet", category="Payments", type="Authorize.net",
        urlscan_query="domain:accept.authorize.net", publicwww_query='"authorize.net"',
        verify_fingerprints=["accept.authorize.net", "authorize.net"], exclude_hosts=["authorize.net"]),
+
+    # ---- Payments / BNPL (regional) ----
+    _r(id="gocardless", category="Payments", type="GoCardless (UK/EU)",
+       urlscan_query="domain:gocardless.com", publicwww_query='"gocardless.com"',
+       verify_fingerprints=["gocardless.com", "gocardless"], exclude_hosts=["gocardless.com"]),
+    _r(id="worldpay", category="Payments", type="Worldpay (UK)",
+       urlscan_query="domain:worldpay.com", publicwww_query='"worldpay.com"',
+       verify_fingerprints=["worldpay.com", "worldpay"], exclude_hosts=["worldpay.com"]),
+    _r(id="clearpay", category="Payments", type="Clearpay / Afterpay (UK/US)",
+       urlscan_query="domain:static.afterpay.com", publicwww_query='"static.afterpay.com"',
+       verify_fingerprints=["static.afterpay.com", "afterpay", "clearpay"], exclude_hosts=["afterpay.com", "clearpay.com"]),
+    _r(id="mollie", category="Payments", type="Mollie (EU)",
+       urlscan_query="domain:mollie.com", publicwww_query='"mollie.com"',
+       verify_fingerprints=["mollie.com", "mollie"], exclude_hosts=["mollie.com"]),
+    _r(id="affirm", category="Payments", type="Affirm (US)",
+       urlscan_query="domain:cdn1.affirm.com", publicwww_query='"cdn1.affirm.com"',
+       verify_fingerprints=["cdn1.affirm.com", "affirm.com", "affirm"], exclude_hosts=["affirm.com"]),
+    _r(id="sezzle", category="Payments", type="Sezzle (US)",
+       urlscan_query="domain:widget.sezzle.com", publicwww_query='"widget.sezzle.com"',
+       verify_fingerprints=["widget.sezzle.com", "sezzle"], exclude_hosts=["sezzle.com"]),
+    _r(id="braintree", category="Payments", type="Braintree",
+       urlscan_query="domain:js.braintreegateway.com", publicwww_query='"js.braintreegateway.com"',
+       verify_fingerprints=["js.braintreegateway.com", "braintreegateway", "braintree"], exclude_hosts=["braintreepayments.com"]),
 ]
 
 
