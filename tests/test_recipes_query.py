@@ -1,0 +1,28 @@
+import json
+from sqlmodel import Session
+from app.core.db import init_db, Lead, _now
+from app.core.recipes import matching_leads, DEFAULT_FILTERS
+
+
+def _seed(s):
+    s.add(Lead(business_name="Diner", category_keys_json=json.dumps(["restaurant"]),
+               city="London", phone="1", website_url="https://a.com", score_total=80,
+               date_last_verified=_now(), opt_out_status="clear"))
+    s.add(Lead(business_name="Cafe", category_keys_json=json.dumps(["cafe"]),
+               city="London", phone="", website_url="https://b.com", score_total=40,
+               date_last_verified=_now(), opt_out_status="clear"))
+    s.add(Lead(business_name="OptedOut", category_keys_json=json.dumps(["restaurant"]),
+               city="London", phone="1", score_total=90, date_last_verified=_now(),
+               opt_out_status="opted_out"))
+    s.commit()
+
+
+def test_filters_category_score_contact_and_optout():
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        _seed(s)
+        f = {**DEFAULT_FILTERS, "categories": ["restaurant"], "min_score": 50,
+             "require_phone": True, "city": "London"}
+        res = matching_leads(s, f)
+        names = [l.business_name for l in res]
+        assert names == ["Diner"]          # cafe (low score), optout excluded
