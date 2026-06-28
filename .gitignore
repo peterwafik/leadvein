@@ -7,6 +7,6 @@ __pycache__/
 *.egg-info/
 .DS_Store
 .playwright-mcp/
-leadscraper-ui.png
+leadscraper-*.png
 .superpowers/
 .claude/

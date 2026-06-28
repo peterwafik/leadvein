@@ -13,15 +13,17 @@
     <aside class="hidden md:flex w-56 flex-col bg-white border-r border-slate-200 p-4">
       <div class="text-lg font-semibold text-emerald-600 mb-6">Lead Scraper</div>
       <nav class="space-y-1 text-sm">
-        <a class="block px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 font-medium">Search</a>
-        <a class="block px-3 py-2 rounded-lg text-slate-500">Jobs</a>
-        <a class="block px-3 py-2 rounded-lg text-slate-500">Recipes</a>
-        <a class="block px-3 py-2 rounded-lg text-slate-500">Settings</a>
+        <a id="nav-search" href="#" class="block px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 font-medium">Search</a>
+        <a id="nav-jobs" href="#" class="block px-3 py-2 rounded-lg text-slate-500">Jobs</a>
+        <a class="block px-3 py-2 rounded-lg text-slate-300 cursor-default">Recipes</a>
+        <a class="block px-3 py-2 rounded-lg text-slate-300 cursor-default">Settings</a>
       </nav>
     </aside>
 
     <!-- Main -->
-    <main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
+    <main class="flex-1 p-6">
+     <!-- ===== Search view ===== -->
+     <div id="view-search" class="grid grid-cols-1 lg:grid-cols-5 gap-6">
       <!-- Config wizard -->
       <section class="lg:col-span-2 space-y-4">
         <h1 class="text-xl font-semibold">Find leads</h1>
@@ -133,6 +135,31 @@
         </div>
         <div class="bg-slate-900 text-emerald-300 rounded-xl p-3 font-mono text-xs h-40 overflow-auto" id="log"></div>
       </section>
+     </div>
+
+     <!-- ===== Jobs / History view ===== -->
+     <div id="view-jobs" class="hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-semibold">Jobs &amp; history</h1>
+        <button id="jobsRefresh" class="text-sm px-3 py-1 rounded-lg border">Refresh</button>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100">
+            <tr>
+              <th class="text-left p-3">Date</th>
+              <th class="text-left p-3">Type</th>
+              <th class="text-left p-3">Source</th>
+              <th class="text-left p-3">Status</th>
+              <th class="text-left p-3">Leads</th>
+              <th class="text-left p-3">Download</th>
+            </tr>
+          </thead>
+          <tbody id="jobsRows"></tbody>
+        </table>
+        <div id="jobsEmpty" class="p-6 text-sm text-slate-500 hidden">No jobs yet — run a search to populate history.</div>
+      </div>
+     </div>
     </main>
   </div>
   <script src="/static/app.js"></script>

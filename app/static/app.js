@@ -263,7 +263,81 @@ async function customRecipe() {
   await loadRecipes();
 }
 
+// ---- Jobs / History view ----
+function showView(name) {
+  $("view-search").classList.toggle("hidden", name !== "search");
+  $("view-jobs").classList.toggle("hidden", name !== "jobs");
+  const active = "block px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 font-medium";
+  const idle = "block px-3 py-2 rounded-lg text-slate-500";
+  $("nav-search").className = name === "search" ? active : idle;
+  $("nav-jobs").className = name === "jobs" ? active : idle;
+  if (name === "jobs") loadJobs();
+}
+
+function jobStatusChip(status) {
+  const map = {
+    done: "bg-emerald-100 text-emerald-700",
+    running: "bg-amber-100 text-amber-700",
+    pending: "bg-slate-100 text-slate-500",
+    error: "bg-red-100 text-red-700",
+  };
+  const span = document.createElement("span");
+  span.className = `px-2 py-0.5 rounded-full text-xs ${map[status] || "bg-slate-100 text-slate-500"}`;
+  span.textContent = status || "—";
+  return span;
+}
+
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
+function dlLink(label, href) {
+  const a = document.createElement("a");
+  a.className = "text-emerald-600 underline mr-3";
+  a.textContent = label;
+  a.href = href;
+  return a;
+}
+
+async function loadJobs() {
+  const tbody = $("jobsRows");
+  tbody.innerHTML = "";
+  let jobs = [];
+  try {
+    jobs = (await fetch("/api/jobs").then((r) => r.json())).jobs || [];
+  } catch (e) { /* leave empty */ }
+  $("jobsEmpty").classList.toggle("hidden", jobs.length > 0);
+  jobs.forEach((j) => {
+    const tr = document.createElement("tr");
+    tr.className = "border-t";
+    const td = (child) => {
+      const c = document.createElement("td");
+      c.className = "p-3";
+      if (child instanceof Node) c.appendChild(child);
+      else c.textContent = child == null ? "" : String(child);
+      return c;
+    };
+    tr.appendChild(td(fmtDate(j.created_at)));
+    tr.appendChild(td(j.type));
+    tr.appendChild(td(j.source));
+    tr.appendChild(td(jobStatusChip(j.status)));
+    tr.appendChild(td(j.lead_count == null ? "" : j.lead_count));
+    const dl = document.createElement("td");
+    dl.className = "p-3 whitespace-nowrap";
+    const id = encodeURIComponent(j.id);
+    dl.appendChild(dlLink(".xlsx", `/api/jobs/${id}/results.xlsx`));
+    dl.appendChild(dlLink(".csv", `/api/jobs/${id}/results.csv`));
+    tr.appendChild(dl);
+    tbody.appendChild(tr);
+  });
+}
+
 function wire() {
+  $("nav-search").addEventListener("click", (e) => { e.preventDefault(); showView("search"); });
+  $("nav-jobs").addEventListener("click", (e) => { e.preventDefault(); showView("jobs"); });
+  $("jobsRefresh").addEventListener("click", loadJobs);
   $("region").addEventListener("change", onRegionChange);
   $("category").addEventListener("change", populateTypes);
   $("type").addEventListener("change", showFingerprints);
