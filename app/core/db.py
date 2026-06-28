@@ -10,6 +10,7 @@ def _now() -> str:
 
 
 class User(SQLModel, table=True):
+    __tablename__ = "lv_user"
     id: int | None = Field(default=None, primary_key=True)
     email: str = Field(index=True, unique=True)
     password_hash: str = ""
@@ -19,6 +20,7 @@ class User(SQLModel, table=True):
 
 
 class BuyerAccount(SQLModel, table=True):
+    __tablename__ = "lv_buyer_account"
     id: int | None = Field(default=None, primary_key=True)
     company_name: str = ""
     credits: int = 0
@@ -27,6 +29,7 @@ class BuyerAccount(SQLModel, table=True):
 
 
 class LeadSource(SQLModel, table=True):
+    __tablename__ = "lv_lead_source"
     id: int | None = Field(default=None, primary_key=True)
     key: str = Field(index=True, unique=True)
     name: str = ""
@@ -39,6 +42,7 @@ class LeadSource(SQLModel, table=True):
 
 
 class LeadCategory(SQLModel, table=True):
+    __tablename__ = "lv_lead_category"
     id: int | None = Field(default=None, primary_key=True)
     key: str = Field(index=True, unique=True)
     label: str = ""
@@ -46,6 +50,7 @@ class LeadCategory(SQLModel, table=True):
 
 
 class CategoryMapping(SQLModel, table=True):
+    __tablename__ = "lv_category_mapping"
     id: int | None = Field(default=None, primary_key=True)
     source_key: str = Field(index=True)
     external_value: str = Field(index=True)  # e.g. "amenity=restaurant"
@@ -53,6 +58,7 @@ class CategoryMapping(SQLModel, table=True):
 
 
 class Lead(SQLModel, table=True):
+    __tablename__ = "lv_lead"
     id: int | None = Field(default=None, primary_key=True)
     business_name: str = ""
     category_keys_json: str = "[]"
@@ -96,6 +102,7 @@ class Lead(SQLModel, table=True):
 
 
 class LeadRecipe(SQLModel, table=True):
+    __tablename__ = "lv_lead_recipe"
     id: int | None = Field(default=None, primary_key=True)
     buyer_account_id: int = 0
     name: str = ""
@@ -105,6 +112,7 @@ class LeadRecipe(SQLModel, table=True):
 
 
 class PurchasedLead(SQLModel, table=True):
+    __tablename__ = "lv_purchased_lead"
     id: int | None = Field(default=None, primary_key=True)
     buyer_account_id: int = Field(index=True)
     lead_id: int = Field(index=True)
@@ -115,6 +123,7 @@ class PurchasedLead(SQLModel, table=True):
 
 
 class CreditTransaction(SQLModel, table=True):
+    __tablename__ = "lv_credit_transaction"
     id: int | None = Field(default=None, primary_key=True)
     buyer_account_id: int = Field(index=True)
     delta: int = 0
@@ -124,6 +133,7 @@ class CreditTransaction(SQLModel, table=True):
 
 
 class SuppressionList(SQLModel, table=True):
+    __tablename__ = "lv_suppression_list"
     id: int | None = Field(default=None, primary_key=True)
     buyer_account_id: int | None = None  # null => global suppression
     name: str = ""
@@ -131,6 +141,7 @@ class SuppressionList(SQLModel, table=True):
 
 
 class SuppressionEntry(SQLModel, table=True):
+    __tablename__ = "lv_suppression_entry"
     id: int | None = Field(default=None, primary_key=True)
     list_id: int = Field(index=True)
     kind: str = ""  # domain | phone | email | business_name
@@ -138,6 +149,7 @@ class SuppressionEntry(SQLModel, table=True):
 
 
 class OptOutRequest(SQLModel, table=True):
+    __tablename__ = "lv_opt_out_request"
     id: int | None = Field(default=None, primary_key=True)
     kind: str = ""  # domain | phone | email
     value: str = Field(default="", index=True)
@@ -146,6 +158,7 @@ class OptOutRequest(SQLModel, table=True):
 
 
 class AuditLog(SQLModel, table=True):
+    __tablename__ = "lv_audit_log"
     id: int | None = Field(default=None, primary_key=True)
     actor_user_id: int | None = None
     action: str = ""
@@ -156,6 +169,7 @@ class AuditLog(SQLModel, table=True):
 
 
 class IngestionJob(SQLModel, table=True):
+    __tablename__ = "lv_ingestion_job"
     id: int | None = Field(default=None, primary_key=True)
     adapter_key: str = ""
     query_json: str = "{}"
