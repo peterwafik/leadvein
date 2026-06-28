@@ -84,15 +84,17 @@ def _clean_emails(candidates: list[str], extra_blocklist: tuple = ()) -> list[st
 
 
 def _extract_name(soup: BeautifulSoup) -> str:
+    # Match the reference engine's precedence: start from <title>, then OVERRIDE
+    # with og:site_name / og:title when present (og wins, but falls back to title
+    # if the og content is empty).
+    name = ""
     if soup.title and soup.title.string:
-        t = soup.title.string.strip()
-        if t:
-            return t
-    for prop in ("og:site_name", "og:title"):
-        tag = soup.find("meta", attrs={"property": prop})
-        if tag and tag.get("content"):
-            return tag["content"].strip()
-    return ""
+        name = soup.title.string.strip()
+    og = (soup.find("meta", attrs={"property": "og:site_name"})
+          or soup.find("meta", attrs={"property": "og:title"}))
+    if og and og.get("content"):
+        name = og["content"].strip() or name
+    return name
 
 
 def analyse(recipe, url: str, html: str) -> LeadData:

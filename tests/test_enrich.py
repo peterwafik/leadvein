@@ -33,8 +33,15 @@ def test_analyse_confirms_platform_and_matched_fingerprint():
 
 
 def test_analyse_extracts_name():
+    # og:site_name overrides <title> (matches the reference engine's precedence)
     lead = analyse(GF, "https://marios.com/", SAMPLE_HTML)
-    assert lead.name == "Mario's Pizzeria"
+    assert lead.name == "Mario's Pizzeria Official"
+
+
+def test_analyse_name_falls_back_to_title_without_og():
+    html = "<html><head><title>Just Title</title></head><body>x</body></html>"
+    lead = analyse(GF, "https://x.com/", html)
+    assert lead.name == "Just Title"
 
 
 def test_analyse_extracts_filtered_emails():
