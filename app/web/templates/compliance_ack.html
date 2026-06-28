@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<div class="max-w-lg mx-auto bg-white p-6 rounded-xl border mt-10 text-sm">
+  <h1 class="text-lg font-semibold mb-3">Compliance acknowledgement</h1>
+  <ul class="list-disc pl-5 space-y-1 text-slate-600">
+    <li>I am responsible for lawful B2B outreach and will respect opt-outs.</li>
+    <li>I will not use these leads for spam and will follow applicable marketing law.</li>
+    <li>I will use suppression lists and will not resell leads unless permitted.</li>
+    <li>I understand data is business-level, from lawful public/official/licensed sources with attribution.</li>
+  </ul>
+  <form method="post" action="/app/ack" class="mt-4"><button class="bg-emerald-600 text-white rounded-lg px-4 py-2">I acknowledge</button></form>
+</div>{% endblock %}

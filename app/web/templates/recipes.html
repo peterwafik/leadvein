@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block body %}
+<h1 class="text-xl font-semibold mb-4">Lead Recipes</h1>
+<form method="post" action="/app/recipes" class="bg-white p-4 rounded-xl border grid grid-cols-2 gap-3 mb-4 text-sm">
+  <label>Name<input name="name" class="mt-1 w-full border rounded-lg p-2" required></label>
+  <label>Scoring profile<input name="scoring_profile_key" value="utility_energy" class="mt-1 w-full border rounded-lg p-2"></label>
+  <label>Categories<input name="categories" class="mt-1 w-full border rounded-lg p-2" placeholder="restaurant, cafe"></label>
+  <label>City<input name="city" class="mt-1 w-full border rounded-lg p-2"></label>
+  <label>Min score<input name="min_score" type="number" value="50" class="mt-1 w-full border rounded-lg p-2"></label>
+  <label class="flex items-center gap-2 mt-5"><input type="checkbox" name="require_phone"> Require phone</label>
+  <button class="col-span-2 bg-emerald-600 text-white rounded-lg py-2">Save recipe</button>
+</form>
+<div class="space-y-2">{% for r in recipes %}<div class="bg-white p-3 rounded-xl border text-sm">{{ r.name }} — profile {{ r.scoring_profile_key }}</div>{% endfor %}</div>{% endblock %}

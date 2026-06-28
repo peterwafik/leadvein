@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block body %}
+<h1 class="text-xl font-semibold mb-4">Marketplace</h1>
+<form method="post" action="/app/marketplace/search" class="bg-white p-4 rounded-xl border grid grid-cols-2 gap-3 mb-4 text-sm">
+  <label>Categories (comma-sep)<input name="categories" class="mt-1 w-full border rounded-lg p-2" placeholder="restaurant, cafe"></label>
+  <label>City<input name="city" class="mt-1 w-full border rounded-lg p-2" placeholder="London"></label>
+  <label>Min score<input name="min_score" type="number" value="50" class="mt-1 w-full border rounded-lg p-2"></label>
+  <label>Freshness (days, 0=any)<input name="freshness_days" type="number" value="0" class="mt-1 w-full border rounded-lg p-2"></label>
+  <label class="flex items-center gap-2"><input type="checkbox" name="require_phone"> Require phone</label>
+  <label class="flex items-center gap-2"><input type="checkbox" name="require_website"> Require website</label>
+  <button class="col-span-2 bg-emerald-600 text-white rounded-lg py-2">Search</button>
+</form>
+{% if results is not none %}
+<p class="text-sm text-slate-600 mb-3">{{ estimate.count }} matching · {{ estimate.score_buckets['80+'] }} high-score · est. {{ estimate.total_price_credits }} credits to unlock all. Credits: {{ credits }}.</p>
+<div class="grid grid-cols-3 gap-4">
+  {% for r in results %}
+  <div class="bg-white p-4 rounded-xl border">
+    <div class="flex justify-between"><span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{{ r.score_total }}</span><span class="text-xs text-slate-400">{{ r.source_type }}</span></div>
+    <div class="mt-2 text-sm font-medium">{{ r.category_keys|join(', ') }}</div>
+    <div class="text-xs text-slate-500">{{ r.city }} · {{ r.country }}</div>
+    <div class="mt-1 text-xs text-slate-500">{% if r.has_phone %}☎{% endif %} {% if r.has_email %}✉{% endif %} {% if r.has_website %}🌐{% endif %}</div>
+    <div class="mt-2 text-xs text-slate-600">{{ r.reason }}</div>
+    <div class="mt-3 flex justify-between items-center">
+      <span class="text-sm">{{ r.price_credits }} credits</span>
+      {% if r.already_owned %}<span class="text-xs text-emerald-600">Owned</span>
+      {% else %}<form method="post" action="/app/unlock/{{ r.lead_id }}"><button class="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1">Unlock</button></form>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

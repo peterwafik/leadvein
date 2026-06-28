@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block body %}
+<div class="flex justify-between mb-4"><h1 class="text-xl font-semibold">Purchased Leads</h1>
+<a href="/app/export.csv" class="text-sm border rounded-lg px-3 py-1">Export CSV</a></div>
+<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm">
+<thead class="bg-slate-100"><tr><th class="text-left p-2">Business</th><th class="text-left p-2">City</th><th class="text-left p-2">Phone</th><th class="text-left p-2">Email</th><th class="text-left p-2">Score</th><th class="text-left p-2">Status</th><th></th></tr></thead>
+<tbody>{% for r in rows %}<tr class="border-t"><td class="p-2">{{ r.business_name }}</td><td class="p-2">{{ r.city }}</td><td class="p-2">{{ r.phone }}</td><td class="p-2">{{ r.public_email }}</td><td class="p-2">{{ r.score_total }}</td><td class="p-2">{{ r.status }}</td><td class="p-2"><a class="text-emerald-600 underline" href="/app/purchased/{{ r.lead_id }}">View</a></td></tr>{% endfor %}</tbody>
+</table></div>{% endblock %}

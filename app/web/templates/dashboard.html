@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block body %}
+<h1 class="text-xl font-semibold mb-4">Dashboard</h1>
+<div class="grid grid-cols-3 gap-4">
+  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold text-emerald-600">{{ credits }}</div><div class="text-sm text-slate-500">Credits</div></div>
+  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_purchased }}</div><div class="text-sm text-slate-500">Purchased leads</div></div>
+  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_recipes }}</div><div class="text-sm text-slate-500">Saved recipes</div></div>
+</div>
+{% if not acked %}<p class="mt-4 text-sm text-amber-700">You must accept the compliance terms before your first purchase. <a class="underline" href="/app/ack">Review &amp; accept</a></p>{% endif %}
+{% endblock %}

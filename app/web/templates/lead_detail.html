@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block body %}
+<a href="/app/purchased" class="text-sm text-slate-500">&larr; Purchased</a>
+<h1 class="text-xl font-semibold my-3">{{ lead.business_name }}</h1>
+<div class="grid grid-cols-2 gap-4">
+  <div class="bg-white p-4 rounded-xl border text-sm space-y-1">
+    <div><b>Phone:</b> {{ lead.phone }}</div><div><b>Email:</b> {{ lead.public_email }}</div>
+    <div><b>Website:</b> <a class="text-emerald-600 underline" href="{{ lead.website_url }}" target="_blank" rel="noopener">{{ lead.website_url }}</a></div>
+    <div><b>Address:</b> {{ lead.address_line1 }}, {{ lead.city }} {{ lead.postal_code }} {{ lead.country }}</div>
+    <div><b>Category:</b> {{ lead.category_keys|join(', ') }}</div>
+  </div>
+  <div class="bg-white p-4 rounded-xl border text-sm space-y-1">
+    <div><b>Score:</b> {{ lead.score_total }} — {{ lead.score_explanation }}</div>
+    <div><b>Source:</b> {{ lead.source_name }}</div>
+    <div><b>Source URL:</b> <a class="text-emerald-600 underline" href="{{ lead.source_url }}" target="_blank" rel="noopener">{{ lead.source_url }}</a></div>
+    <div><b>License:</b> {{ lead.source_license }}</div>
+    <div><b>Lawful basis:</b> {{ lead.lawful_basis }}</div>
+    <div><b>Verified:</b> {{ lead.date_last_verified }}</div>
+  </div>
+</div>{% endblock %}
