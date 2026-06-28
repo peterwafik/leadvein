@@ -8,6 +8,7 @@ from app.core.recipes import DEFAULT_FILTERS
 from app.core.purchasing import unlock_lead, grant_credits, LeadSuppressed
 from app.core.export_leads import export_purchased_csv
 from app.core.compliance import lead_opted_out
+from app.core.leadcats import sync_lead_categories
 
 
 def test_lead_model_has_no_independent_optout_flag():
@@ -29,6 +30,7 @@ def test_opt_out_single_source_normalized_across_search_unlock_export():
                     website_url="https://gone.com", score_total=90,
                     date_last_verified=_now(), price_credits=3)
         s.add(lead); s.commit(); s.refresh(lead)
+        sync_lead_categories(s, lead)
         # opt-out stored in a DIFFERENT format than the lead (digits-only phone)
         s.add(OptOutRequest(kind="phone", value="+442012345678", applied=True))
         s.commit()

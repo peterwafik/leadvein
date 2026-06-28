@@ -3,16 +3,20 @@ from sqlmodel import Session
 from app.core.db import (init_db, Lead, _now, SuppressionList, SuppressionEntry)
 from app.core.marketplace import search, estimate
 from app.core.recipes import DEFAULT_FILTERS
+from app.core.leadcats import sync_lead_categories
 
 
 def _seed(s):
-    s.add(Lead(business_name="Diner", category_keys_json=json.dumps(["restaurant"]),
-               city="London", phone="1", website_url="https://keep.com", score_total=85,
-               date_last_verified=_now(), price_credits=3))
-    s.add(Lead(business_name="Suppressed", category_keys_json=json.dumps(["restaurant"]),
-               city="London", phone="1", website_url="https://blocked.com",
-               score_total=88, date_last_verified=_now(), price_credits=3))
-    s.commit()
+    diner = Lead(business_name="Diner", category_keys_json=json.dumps(["restaurant"]),
+                 city="London", phone="1", website_url="https://keep.com", score_total=85,
+                 date_last_verified=_now(), price_credits=3)
+    s.add(diner); s.commit(); s.refresh(diner)
+    sync_lead_categories(s, diner)
+    suppressed = Lead(business_name="Suppressed", category_keys_json=json.dumps(["restaurant"]),
+                      city="London", phone="1", website_url="https://blocked.com",
+                      score_total=88, date_last_verified=_now(), price_credits=3)
+    s.add(suppressed); s.commit(); s.refresh(suppressed)
+    sync_lead_categories(s, suppressed)
     lst = SuppressionList(buyer_account_id=1, name="mine")
     s.add(lst); s.commit(); s.refresh(lst)
     s.add(SuppressionEntry(list_id=lst.id, kind="domain", value="blocked.com"))

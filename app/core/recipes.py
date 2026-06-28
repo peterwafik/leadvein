@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select
 
 from app.core.db import Lead
+from app.core.leadcats import lead_ids_for_categories
 
 DEFAULT_FILTERS = {
     "categories": [], "city": "", "region": "", "country": "",
@@ -31,16 +32,16 @@ def matching_leads(session: Session, filters: dict, *,
     f = {**DEFAULT_FILTERS, **(filters or {})}
     rows = session.exec(select(Lead).where(
         Lead.score_total >= int(f["min_score"]))).all()
-    cats = set(f["categories"] or [])
+    cats = [c for c in (f["categories"] or []) if c]
     excl = set(f["exclude_categories"] or [])
+    cat_ids = lead_ids_for_categories(session, cats) if cats else None  # None = no category filter
     out = []
     for l in rows:
         if l.id in exclude_lead_ids:
             continue
-        lcats = set(json.loads(l.category_keys_json or "[]"))
-        if cats and not (lcats & cats):
+        if cat_ids is not None and l.id not in cat_ids:
             continue
-        if excl and (lcats & excl):
+        if excl and (set(json.loads(l.category_keys_json or "[]")) & excl):
             continue
         if f["city"] and f["city"].lower() not in (l.city or "").lower():
             continue

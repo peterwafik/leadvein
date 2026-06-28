@@ -50,7 +50,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
         ctx = _lead_context(n, enrichment)
         scored = score(ctx, profile)
         addr = n.address or {}
-        session.add(Lead(
+        lead_obj = Lead(
             business_name=n.business_name,
             category_keys_json=json.dumps(n.category_keys),
             address_line1=addr.get("line1", ""), city=addr.get("city", ""),
@@ -67,7 +67,11 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             source_url=n.source_url or adapter.meta.url,
             source_license=n.source_license or adapter.meta.license,
             attribution=adapter.attribution(),
-            date_last_verified=_now(), dedupe_key=key))
+            date_last_verified=_now(), dedupe_key=key)
+        session.add(lead_obj)
+        session.flush()  # assign lead_obj.id
+        from app.core.leadcats import sync_lead_categories
+        sync_lead_categories(session, lead_obj)
         counts["stored"] += 1
 
     job = IngestionJob(adapter_key=adapter.meta.key,

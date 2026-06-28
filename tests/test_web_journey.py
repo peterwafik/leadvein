@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 import app.leadvault as lv
+from app.core.leadcats import sync_lead_categories
 
 
 def client():
@@ -24,15 +25,16 @@ def test_full_buyer_journey(monkeypatch):
     from app.core.db import Lead, _now
     # seed one matching lead directly into the app DB
     with Session(lv.engine) as s:
-        s.add(Lead(business_name="Hidden Diner",
-                   category_keys_json=json.dumps(["restaurant"]), city="London",
-                   phone="+44 1", public_email="info@diner.com",
-                   website_url="https://hiddendiner.co.uk", score_total=85,
-                   subscores_json=json.dumps({"fit": 85}),
-                   score_explanation="independent restaurant, open 7 days",
-                   source_name="OpenStreetMap (Overpass)", source_url="http://osm",
-                   source_license="ODbL", date_last_verified=_now(), price_credits=3))
-        s.commit()
+        hidden = Lead(business_name="Hidden Diner",
+                      category_keys_json=json.dumps(["restaurant"]), city="London",
+                      phone="+44 1", public_email="info@diner.com",
+                      website_url="https://hiddendiner.co.uk", score_total=85,
+                      subscores_json=json.dumps({"fit": 85}),
+                      score_explanation="independent restaurant, open 7 days",
+                      source_name="OpenStreetMap (Overpass)", source_url="http://osm",
+                      source_license="ODbL", date_last_verified=_now(), price_credits=3)
+        s.add(hidden); s.commit(); s.refresh(hidden)
+        sync_lead_categories(s, hidden)
     c = client()
     c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345"})
     # marketplace search returns a MASKED card (no business name / contact)

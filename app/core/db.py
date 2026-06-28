@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Index, UniqueConstraint
 from sqlmodel import Field, SQLModel, create_engine
 
 
@@ -60,15 +60,16 @@ class CategoryMapping(SQLModel, table=True):
 
 class Lead(SQLModel, table=True):
     __tablename__ = "lv_lead"
+    __table_args__ = (Index("ix_lv_lead_source_key_col", "source_key"),)
     id: int | None = Field(default=None, primary_key=True)
     business_name: str = ""
     category_keys_json: str = "[]"
     # location
     address_line1: str = ""
-    city: str = ""
+    city: str = Field(default="", index=True)
     region: str = ""
     postal_code: str = ""
-    country: str = ""
+    country: str = Field(default="", index=True)
     latitude: float | None = None
     longitude: float | None = None
     # contact (business-level only)
@@ -79,7 +80,7 @@ class Lead(SQLModel, table=True):
     attributes_json: str = "{}"
     intent_json: str = "{}"
     # scoring
-    score_total: int = 0
+    score_total: int = Field(default=0, index=True)
     subscores_json: str = "{}"
     score_explanation: str = ""
     scoring_profile_key: str = ""
@@ -91,7 +92,7 @@ class Lead(SQLModel, table=True):
     attribution: str = ""
     lawful_basis: str = "legitimate_interest_b2b_public"
     date_discovered: str = Field(default_factory=_now)
-    date_last_verified: str | None = None
+    date_last_verified: str | None = Field(default=None, index=True)
     suppression_status: str = "clear"
     retention_expiry: str | None = None
     # marketplace
@@ -179,6 +180,13 @@ class IngestionJob(SQLModel, table=True):
     status: str = "pending"
     counts_json: str = "{}"
     created_at: str = Field(default_factory=_now)
+
+
+class LeadCategoryLink(SQLModel, table=True):
+    __tablename__ = "lv_lead_category_link"
+    id: int | None = Field(default=None, primary_key=True)
+    lead_id: int = Field(index=True)
+    category_key: str = Field(default="", index=True)
 
 
 def init_db(url: str = "sqlite:///leadvault.db"):
