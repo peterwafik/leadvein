@@ -28,6 +28,10 @@ Open http://127.0.0.1:8000
 2. **Where / filters** — discovery source (urlscan.io free by default, or PublicWWW with a key),
    optional country/keyword, max results, politeness delay + concurrency, and an "only confirmed"
    toggle. Expand **Manual domains** to bypass discovery and verify a hand-picked host list.
+   *Geo-filtering:* set **Country** (e.g. `GB`, `US`, `Germany`) to keep only in-country leads —
+   detection uses ccTLD, phone country code and schema.org address, and the detected country is
+   shown per lead. By default a lead is dropped only if it's positively a *different* country;
+   tick **Strict geo** to also drop leads with no detectable country.
 3. **Fields to extract** — toggle the output columns.
 4. **Run** — watch the live progress bar + log; confirmed leads stream into the table. When done,
    download `.xlsx` (a `<Type> Prospects` tab) or `.csv`.

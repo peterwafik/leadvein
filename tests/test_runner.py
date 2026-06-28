@@ -82,6 +82,35 @@ def test_manual_hosts_bypass_discovery():
     assert any("marios.com" in l["website"] for l in leads)
 
 
+def test_geo_filter_keeps_target_country_drops_others():
+    UK = ('<html><title>UK Diner</title><body>'
+          '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script>'
+          '<a href="tel:+44 20 1234 5678">call</a></body></html>')
+    DE = ('<html><title>DE Diner</title><body>'
+          '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script>'
+          '<a href="tel:+49 30 123456">call</a></body></html>')
+
+    def fetch_fn(url, **kwargs):
+        return (url, UK) if "uk" in url else (url, DE)
+
+    cfg = JobConfig(source="urlscan", limit=10, keyword="", country="GB",
+                    delay=0.0, concurrency=2, only_confirmed=False,
+                    urlscan_key=None, publicwww_key=None,
+                    manual_hosts=["ukshop.com", "deshop.com"])
+
+    async def _run():
+        events = []
+        async for ev in run_job(GF, cfg, fetch_fn=fetch_fn, robots=AllowAllRobots()):
+            events.append(ev)
+        return events
+
+    events = asyncio.run(_run())
+    leads = [e["lead"] for e in events if e["type"] == "lead"]
+    assert len(leads) == 1                      # only the UK lead survives
+    assert leads[0]["country"] == "GB"          # detected + recorded
+    assert events[-1]["geo_filtered"] == 1      # the DE lead was filtered out
+
+
 def test_only_confirmed_filters_unconfirmed():
     cfg = JobConfig(source="urlscan", limit=10, keyword="", country="",
                     delay=0.0, concurrency=2, only_confirmed=True,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from urllib.parse import unquote
@@ -153,7 +154,47 @@ def analyse(recipe, url: str, html: str) -> LeadData:
                 lead.socials[name] = a["href"]
                 break
 
+    # best-effort address + country from schema.org JSON-LD (LocalBusiness etc.)
+    lead.address, lead.country = _extract_address_country(soup)
+
     return lead
+
+
+def _find_postal(node):
+    """Recursively find the first schema.org PostalAddress-ish dict."""
+    if isinstance(node, dict):
+        if any(k in node for k in ("streetAddress", "addressLocality",
+                                   "postalCode", "addressCountry")):
+            parts = [node.get("streetAddress"), node.get("addressLocality"),
+                     node.get("postalCode")]
+            addr = ", ".join(str(p) for p in parts if p)
+            c = node.get("addressCountry")
+            if isinstance(c, dict):
+                c = c.get("name") or c.get("@id") or ""
+            return {"address": addr, "country": str(c) if c else ""}
+        for v in node.values():
+            found = _find_postal(v)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for item in node:
+            found = _find_postal(item)
+            if found:
+                return found
+    return None
+
+
+def _extract_address_country(soup: BeautifulSoup) -> tuple[str, str]:
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = tag.string or tag.get_text() or ""
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        found = _find_postal(data)
+        if found and (found["address"] or found["country"]):
+            return found["address"], found["country"]
+    return "", ""
 
 
 def fetch(url: str, *, timeout: int = 12, user_agent: str = USER_AGENT):

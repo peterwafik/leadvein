@@ -148,6 +148,12 @@ function addRow(lead) {
   tdPhone.textContent = lead.phone || "";
   tr.appendChild(tdPhone);
 
+  // Country cell (detected)
+  const tdCountry = document.createElement("td");
+  tdCountry.className = "p-2";
+  tdCountry.textContent = lead.country || "—";
+  tr.appendChild(tdCountry);
+
   $("rows").appendChild(tr);
 }
 
@@ -179,6 +185,7 @@ async function runJob() {
     delay: parseFloat($("delay").value),
     concurrency: parseInt($("concurrency").value, 10),
     only_confirmed: $("onlyConfirmed").checked,
+    geo_strict: $("geoStrict").checked,
     manual_hosts: manualHosts,
     columns: selectedColumns(),
   };
@@ -226,6 +233,9 @@ function streamJob(job_id) {
       msg = `${raw} candidate(s) found, ${d.checked} checked, 0 confirmed on platform (query: ${q}).`;
     } else {
       msg = `Done — ${raw} candidate(s), ${d.checked} checked, ${d.confirmed} confirmed (query: ${q}).`;
+    }
+    if (d.geo_filtered) {
+      msg += ` ${d.geo_filtered} filtered out as off-country (${d.geo_country || "target"}).`;
     }
     $("summary").textContent = msg;
     $("dlXlsx").disabled = false;

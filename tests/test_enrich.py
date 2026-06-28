@@ -75,6 +75,21 @@ def test_analyse_not_confirmed_when_absent():
     assert lead.matched == ""
 
 
+def test_analyse_extracts_address_and_country_from_jsonld():
+    html = """
+    <html><head><title>Joe Diner</title>
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"Restaurant","name":"Joe Diner",
+     "address":{"@type":"PostalAddress","streetAddress":"12 High St",
+     "addressLocality":"London","postalCode":"SW1A 1AA","addressCountry":"GB"}}
+    </script></head><body>x</body></html>
+    """
+    lead = analyse(GF, "https://joediner.co.uk/", html)
+    assert "12 High St" in lead.address
+    assert "London" in lead.address
+    assert lead.country == "GB"
+
+
 def test_email_blocklist_is_generalized_not_gloriafood_specific():
     from app.engine.enrich import GLOBAL_EMAIL_BLOCKLIST
     # the GLOBAL blocklist must be platform-agnostic — no GloriaFood vendor token

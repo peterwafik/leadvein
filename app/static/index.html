@@ -62,7 +62,13 @@
             </select>
           </label>
           <label class="block text-sm">Country / region (optional)
-            <input id="country" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g. US" />
+            <input id="country" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g. GB, US, Germany" />
+          </label>
+          <label class="text-xs flex items-start gap-2 text-slate-500">
+            <input id="geoStrict" type="checkbox" class="mt-0.5" />
+            <span>Strict geo: drop leads with <em>no</em> detectable country too. (Default keeps a
+              lead unless it's positively in a different country — detection uses TLD, phone code
+              and schema.org address.)</span>
           </label>
           <label class="block text-sm">Vertical / keyword (optional)
             <input id="keyword" class="mt-1 w-full border rounded-lg p-2" placeholder="e.g. pizza" />
@@ -127,6 +133,7 @@
                   <th class="text-left p-2">Website</th>
                   <th class="text-left p-2">Email</th>
                   <th class="text-left p-2">Phone</th>
+                  <th class="text-left p-2">Country</th>
                 </tr>
               </thead>
               <tbody id="rows"></tbody>

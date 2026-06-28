@@ -39,6 +39,7 @@ class JobCreate(BaseModel):
     delay: float = 1.0
     concurrency: int = 5
     only_confirmed: bool = True
+    geo_strict: bool = False
     manual_hosts: list[str] = Field(default_factory=list)
     columns: list[str] = Field(default_factory=lambda: list(DEFAULT_COLUMNS))
 

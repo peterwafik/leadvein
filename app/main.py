@@ -139,7 +139,7 @@ def create_job(body: JobCreate):
     columns = body.columns or list(DEFAULT_COLUMNS)
     config = JobConfig(
         source=body.source, limit=min(body.limit, 1000), keyword=body.keyword,
-        country=body.country, delay=body.delay,
+        country=body.country, geo_strict=body.geo_strict, delay=body.delay,
         concurrency=min(body.concurrency, 10), only_confirmed=body.only_confirmed,
         urlscan_key=URLSCAN_KEY, publicwww_key=PUBLICWWW_KEY,
         manual_hosts=[h.strip() for h in body.manual_hosts if h.strip()],
@@ -148,6 +148,7 @@ def create_job(body: JobCreate):
     JOBS[job_id] = {"recipe": recipe, "config": config, "columns": columns,
                     "status": "pending", "totals": {}}
     filters = {"keyword": body.keyword, "country": body.country,
+               "geo_strict": config.geo_strict,
                "limit": config.limit, "delay": config.delay,
                "concurrency": config.concurrency,
                "only_confirmed": config.only_confirmed,
@@ -291,6 +292,7 @@ def rerun_job(job_id: str):
     new = JobCreate(
         recipe_id=recipe_id, source=source,
         keyword=filters.get("keyword", ""), country=filters.get("country", ""),
+        geo_strict=bool(filters.get("geo_strict", False)),
         limit=int(filters.get("limit", 200)), delay=float(filters.get("delay", 1.0)),
         concurrency=int(filters.get("concurrency", 5)),
         only_confirmed=bool(filters.get("only_confirmed", True)),

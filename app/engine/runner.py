@@ -6,6 +6,7 @@ from typing import AsyncIterator
 
 from .discover import discover_meta as _discover_meta
 from .enrich import analyse, fetch as _fetch, norm_url
+from .geo import infer_country, geo_keep, normalize_country
 from .politeness import RobotsCache, RateLimiter
 
 
@@ -14,7 +15,8 @@ class JobConfig:
     source: str = "urlscan"
     limit: int = 200
     keyword: str = ""
-    country: str = ""  # reserved for future geo-filtering; captured but not yet applied to discovery
+    country: str = ""        # geo target (ISO-2 or name); '' disables geo-filtering
+    geo_strict: bool = False  # strict: also drop leads with no detectable country
     delay: float = 1.0
     concurrency: int = 5
     only_confirmed: bool = True
@@ -68,7 +70,8 @@ async def run_job(recipe, config: JobConfig, *, discover_fn=_discover_meta,
                   f"{total} to verify · query: {query}"}
 
     sem = asyncio.Semaphore(max(1, min(config.concurrency, 10)))
-    state = {"checked": 0, "confirmed": 0}
+    state = {"checked": 0, "confirmed": 0, "geo_filtered": 0}
+    target_country = normalize_country(config.country) if config.country else ""
     queue: asyncio.Queue = asyncio.Queue()
 
     async def worker(host: str):
@@ -111,9 +114,16 @@ async def run_job(recipe, config: JobConfig, *, discover_fn=_discover_meta,
             lead = payload
             if lead.on_platform:
                 state["confirmed"] += 1
-            if (not config.only_confirmed) or lead.on_platform:
+            # infer + record the lead's country (populates the export column)
+            info = infer_country(lead.website, lead)
+            lead.country = info["country"] or lead.country
+            passes_conf = (not config.only_confirmed) or lead.on_platform
+            geo_ok = geo_keep(target_country, info["country"], config.geo_strict)
+            if passes_conf and geo_ok:
                 yield {"type": "lead",
                        "lead": lead_to_row(lead, recipe, source_query)}
+            elif passes_conf and not geo_ok:
+                state["geo_filtered"] += 1
         yield {"type": "progress", "checked": state["checked"], "total": total,
                "confirmed": state["confirmed"], "current_host": host or "",
                "log": f"[{state['checked']}/{total}] {host}: "
@@ -122,6 +132,9 @@ async def run_job(recipe, config: JobConfig, *, discover_fn=_discover_meta,
     await closer_task
     yield {"type": "done", "checked": state["checked"], "total": total,
            "confirmed": state["confirmed"], "query": query,
-           "raw_candidates": raw_candidates,
+           "raw_candidates": raw_candidates, "geo_filtered": state["geo_filtered"],
+           "geo_country": target_country,
            "totals": {"checked": state["checked"], "confirmed": state["confirmed"],
-                      "raw_candidates": raw_candidates, "query": query}}
+                      "raw_candidates": raw_candidates, "query": query,
+                      "geo_filtered": state["geo_filtered"],
+                      "geo_country": target_country}}
