@@ -12,8 +12,8 @@ USER_AGENT = ("LeadScraper/0.1 (+https://example.com/contact; "
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico")
 # Universal junk/infra domains that are never a real business contact — platform-AGNOSTIC.
-# Per-recipe vendor hosts (e.g. fbgcdn for GloriaFood, cdn.shopify.com for Shopify) are added
-# dynamically from the recipe in analyse(); they MUST NOT be hardcoded here.
+# Per-recipe vendor hosts (the recipe's own CDN / exclude domains) are added dynamically
+# from the recipe in analyse(); platform-specific tokens MUST NOT be hardcoded here.
 GLOBAL_EMAIL_BLOCKLIST = ("sentry", "wixpress", "cloudflare", "gstatic",
                           "googleapis", "w3.org", "schema.org",
                           "sentry.io", "cloudfront")
@@ -115,7 +115,7 @@ def analyse(recipe, url: str, html: str) -> LeadData:
             email_candidates.append(href[7:].split("?")[0])
     email_candidates += EMAIL_RE.findall(html)
     # the recipe's own vendor hosts (exclude_hosts + fingerprints) are filtered out of
-    # emails too — so each platform drops its own infra addresses, GloriaFood-agnostically
+    # emails too — so each platform drops its own vendor/infra addresses generically
     recipe_email_blocklist = tuple(
         t.lower() for t in (list(recipe.exclude_hosts) + list(recipe.verify_fingerprints))
     )
