@@ -6,16 +6,26 @@ import io
 from openpyxl import Workbook, load_workbook
 
 
+def _neutralize(s: str) -> str:
+    # CSV/spreadsheet formula-injection guard: a leading =,+,-,@ is treated as a
+    # formula by Excel/Sheets, so prefix it with a single quote to force text.
+    if s and s[0] in ("=", "+", "-", "@"):
+        return "'" + s
+    return s
+
+
 def _stringify(value) -> str:
     if value is None:
-        return ""
-    if isinstance(value, (list, tuple)):
-        return "; ".join(str(v) for v in value)
-    if isinstance(value, dict):
-        return "; ".join(f"{k}={v}" for k, v in value.items())
-    if isinstance(value, bool):
-        return "Y" if value else "N"
-    return str(value)
+        out = ""
+    elif isinstance(value, (list, tuple)):
+        out = "; ".join(str(v) for v in value)
+    elif isinstance(value, dict):
+        out = "; ".join(f"{k}={v}" for k, v in value.items())
+    elif isinstance(value, bool):
+        out = "Y" if value else "N"
+    else:
+        out = str(value)
+    return _neutralize(out)
 
 
 def rows_to_csv(columns: list[str], rows: list[dict]) -> bytes:
