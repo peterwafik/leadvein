@@ -3,6 +3,18 @@ from app.engine.recipes import (
 )
 
 
+def test_expanded_catalog_breadth_and_unique_ids():
+    ids = [r.id for r in BUILTIN_RECIPES]
+    assert len(ids) == len(set(ids))  # ids unique
+    for expected in ["mailchimp", "klaviyo", "trustpilot", "typeform",
+                     "zendesk", "gtm", "square", "hotjar", "ecwid", "weebly"]:
+        assert expected in ids
+    cats = {r.category for r in BUILTIN_RECIPES}
+    for c in ["Analytics / Tag Managers", "Email / CRM Marketing",
+              "Reviews / Social Proof", "Forms / Surveys"]:
+        assert c in cats
+
+
 def test_gloriafood_recipe_is_faithful():
     gf = get_builtin("gloriafood")
     assert gf is not None
