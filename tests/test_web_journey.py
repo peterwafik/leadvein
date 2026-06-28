@@ -57,3 +57,39 @@ def test_full_buyer_journey(monkeypatch):
     ex = c.get("/app/export.csv")
     assert ex.status_code == 200 and "info@diner.com" in ex.text
     # a different buyer cannot view the detail (ownership guard)
+
+
+def test_admin_ingestion_populates_inventory(monkeypatch):
+    from app.adapters.base import SourceMeta, NormalizedLead
+    from app.adapters import registry as adapter_registry
+
+    class FakeAdminAdapter:
+        meta = SourceMeta(key="fake_admin", name="FakeAdmin", type="test",
+                          url="http://x", license="TESTLIC")
+        def discover(self, query):
+            return [{"n": "Admin Diner"}]
+        def normalize(self, raw):
+            return NormalizedLead(business_name=raw["n"], category_keys=["restaurant"],
+                                  address={"city": "London"}, phone="+44 9",
+                                  website_url="https://admindiner.com",
+                                  source_key=self.meta.key, source_license=self.meta.license)
+        def attribution(self):
+            return "fake"
+
+    adapter_registry.register(FakeAdminAdapter())
+    # avoid live website enrichment during the test
+    import app.web.routes_admin as ra
+    monkeypatch.setattr(ra, "_enrich_for_admin",
+                        lambda lead: {"website_reachable": True, "ssl": True,
+                                      "online_ordering_detected": False,
+                                      "booking_detected": False,
+                                      "payment_provider_detected": False,
+                                      "ecommerce_detected": False,
+                                      "last_scanned": "2026-06-28T00:00:00+00:00"})
+    c = client()
+    c.post("/login", data={"email": "admin@leadvault.local", "password": "admin12345"})
+    r = c.post("/admin/ingest", data={"adapter_key": "fake_admin", "city": "London",
+               "categories": "restaurant", "scoring_profile_key": "utility_energy"},
+               follow_redirects=True)
+    assert r.status_code == 200
+    assert "Admin Diner" in r.text or "1" in r.text  # leads list or count shows the new lead

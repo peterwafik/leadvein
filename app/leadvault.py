@@ -11,6 +11,7 @@ from app.core.db import init_db, User, BuyerAccount
 from app.core.auth import create_user
 from app.seed import seed_all
 from app.web import deps
+from app.web.routes_admin import router as admin_router
 from app.web.routes_auth import router as auth_router
 from app.web.routes_buyer import router as buyer_router
 
@@ -39,6 +40,7 @@ _seed_accounts()
 
 app.include_router(auth_router)
 app.include_router(buyer_router)
+app.include_router(admin_router)
 
 
 @app.get("/")

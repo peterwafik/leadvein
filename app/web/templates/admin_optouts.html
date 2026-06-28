@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block body %}
+<h1 class="text-xl font-semibold mb-4">Opt-out requests</h1>
+<form method="post" action="/admin/optouts" class="bg-white p-4 rounded-xl border flex gap-3 mb-4 text-sm">
+  <select name="kind" class="border rounded-lg p-2"><option value="domain">domain</option><option value="phone">phone</option><option value="email">email</option></select>
+  <input name="value" placeholder="value" class="border rounded-lg p-2 flex-1" required>
+  <button class="bg-emerald-600 text-white rounded-lg px-3 py-1">Apply opt-out</button>
+</form>
+<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">Kind</th><th class="text-left p-2">Value</th><th class="text-left p-2">Applied</th></tr></thead>
+<tbody>{% for o in rows %}<tr class="border-t"><td class="p-2">{{ o.kind }}</td><td class="p-2">{{ o.value }}</td><td class="p-2">{{ o.applied }}</td></tr>{% endfor %}</tbody></table></div>{% endblock %}

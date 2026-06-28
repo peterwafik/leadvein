@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block body %}
+<h1 class="text-xl font-semibold mb-4">Categories</h1>
+<form method="post" action="/admin/categories" class="bg-white p-4 rounded-xl border flex gap-3 mb-4 text-sm">
+  <input name="key" placeholder="key (e.g. florist)" class="border rounded-lg p-2" required>
+  <input name="label" placeholder="Label (e.g. Florist)" class="border rounded-lg p-2" required>
+  <button class="bg-emerald-600 text-white rounded-lg px-3 py-1">Add / update</button>
+</form>
+<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">Key</th><th class="text-left p-2">Label</th></tr></thead>
+<tbody>{% for c in cats %}<tr class="border-t"><td class="p-2">{{ c.key }}</td><td class="p-2">{{ c.label }}</td></tr>{% endfor %}</tbody></table></div>{% endblock %}

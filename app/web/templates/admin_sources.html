@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block body %}
+<h1 class="text-xl font-semibold mb-4">Sources</h1>
+<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">Key</th><th class="text-left p-2">Name</th><th class="text-left p-2">Type</th><th class="text-left p-2">License</th><th class="text-left p-2">Terms</th></tr></thead>
+<tbody>{% for s in rows %}<tr class="border-t"><td class="p-2">{{ s.key }}</td><td class="p-2">{{ s.name }}</td><td class="p-2">{{ s.type }}</td><td class="p-2">{{ s.license }}</td><td class="p-2">{{ s.terms_status }}</td></tr>{% endfor %}</tbody></table></div>{% endblock %}

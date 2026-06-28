@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<h1 class="text-xl font-semibold mb-4">Admin Overview</h1>
+<div class="grid grid-cols-2 gap-4">
+  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_leads }}</div><div class="text-sm text-slate-500">Leads in inventory</div></div>
+  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_sources }}</div><div class="text-sm text-slate-500">Sources</div></div>
+</div>
+<form method="post" action="/admin/grant" class="bg-white p-4 rounded-xl border mt-4 flex gap-3 text-sm items-end">
+  <label>Buyer account id<input name="buyer_account_id" type="number" class="mt-1 block border rounded-lg p-2"></label>
+  <label>Credits<input name="amount" type="number" class="mt-1 block border rounded-lg p-2"></label>
+  <button class="bg-emerald-600 text-white rounded-lg px-3 py-2">Grant credits</button>
+</form>{% endblock %}
