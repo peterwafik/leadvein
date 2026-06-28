@@ -70,3 +70,22 @@ You are responsible for complying with urlscan/PublicWWW Terms of Service and ap
 (e.g. GDPR / CAN-SPAM) when contacting leads. The tool collects only publicly published business
 contact info. Every lead row has a **Status** column (default "Not contacted") so the sheet
 doubles as an outreach tracker and supports opt-out handling.
+
+## LeadVault (compliant B2B lead marketplace)
+
+Run the marketplace app:
+```bash
+.venv/Scripts/python -m uvicorn app.leadvault:app --reload
+```
+Open http://127.0.0.1:8000 → /login. Seeded accounts:
+- Admin: `admin@leadvault.local` / `admin12345` (set `LEADVAULT_ADMIN_PW` to override)
+- Demo buyer: `buyer@demo.local` / `buyer12345` (100 credits)
+
+Flow: admin → Ingestion (pick `osm_overpass`, a city, categories) → buyer → Marketplace
+(masked previews) → Unlock (credits) → Purchased Leads → Export CSV. Every lead carries its
+source, license (e.g. ODbL/OpenStreetMap), and verification date; opt-out/suppression are
+filtered at search, purchase, and export; all unlocks/exports are in the admin Audit Log.
+
+Architecture: source-agnostic `app/core/` marketplace core + pluggable `app/adapters/`
+(OSM/Overpass, urlscan-fingerprint) + `app/scoring/profiles/` (utility_energy is one profile).
+Adding a data source = adding an adapter; adding a vertical = adding a scoring profile.
