@@ -30,8 +30,7 @@ def matching_leads(session: Session, filters: dict, *,
                    exclude_lead_ids: set = frozenset()) -> list[Lead]:
     f = {**DEFAULT_FILTERS, **(filters or {})}
     rows = session.exec(select(Lead).where(
-        Lead.score_total >= int(f["min_score"]),
-        Lead.opt_out_status == "clear")).all()
+        Lead.score_total >= int(f["min_score"]))).all()
     cats = set(f["categories"] or [])
     excl = set(f["exclude_categories"] or [])
     out = []

@@ -91,7 +91,6 @@ class Lead(SQLModel, table=True):
     lawful_basis: str = "legitimate_interest_b2b_public"
     date_discovered: str = Field(default_factory=_now)
     date_last_verified: str | None = None
-    opt_out_status: str = "clear"        # clear | opted_out
     suppression_status: str = "clear"
     retention_expiry: str | None = None
     # marketplace

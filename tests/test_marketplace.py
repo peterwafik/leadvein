@@ -29,8 +29,8 @@ def test_search_excludes_opted_out_leads():
     with Session(engine) as s:
         s.add(Lead(business_name="OptedOutBiz", category_keys_json=json.dumps(["restaurant"]),
                    city="London", phone="1", website_url="https://gone.com", score_total=90,
-                   date_last_verified=_now(), opt_out_status="clear"))  # column says clear...
-        s.add(OptOutRequest(kind="domain", value="gone.com", applied=True))  # ...but opted out
+                   date_last_verified=_now()))
+        s.add(OptOutRequest(kind="domain", value="gone.com", applied=True))
         s.commit()
         f = {**DEFAULT_FILTERS, "categories": ["restaurant"], "city": "London"}
         assert search(s, 1, f) == []   # excluded from search despite the stale column

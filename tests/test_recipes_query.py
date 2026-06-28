@@ -7,13 +7,10 @@ from app.core.recipes import matching_leads, DEFAULT_FILTERS
 def _seed(s):
     s.add(Lead(business_name="Diner", category_keys_json=json.dumps(["restaurant"]),
                city="London", phone="1", website_url="https://a.com", score_total=80,
-               date_last_verified=_now(), opt_out_status="clear"))
+               date_last_verified=_now()))
     s.add(Lead(business_name="Cafe", category_keys_json=json.dumps(["cafe"]),
                city="London", phone="", website_url="https://b.com", score_total=40,
-               date_last_verified=_now(), opt_out_status="clear"))
-    s.add(Lead(business_name="OptedOut", category_keys_json=json.dumps(["restaurant"]),
-               city="London", phone="1", score_total=90, date_last_verified=_now(),
-               opt_out_status="opted_out"))
+               date_last_verified=_now()))
     s.commit()
 
 

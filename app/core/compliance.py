@@ -43,6 +43,12 @@ def is_opted_out(session: Session, *, domain: str = "", phone: str = "",
     return False
 
 
+def lead_opted_out(session: Session, lead) -> bool:
+    """Single source of truth for a lead's opt-out state: the OptOutRequest table."""
+    return is_opted_out(session, domain=host_of(lead.website_url),
+                        phone=lead.phone, email=lead.public_email)
+
+
 def is_suppressed(session: Session, buyer_account_id: int | None, *, domain: str = "",
                   phone: str = "", email: str = "", business_name: str = "") -> bool:
     lists = session.exec(select(SuppressionList).where(

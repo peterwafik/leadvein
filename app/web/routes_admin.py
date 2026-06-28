@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app.adapters import registry as adapter_registry
 from app.adapters.base import AdapterQuery
-from app.core.compliance import audit
+from app.core.compliance import audit, lead_opted_out
 from app.core.db import (Lead, LeadSource, AuditLog, OptOutRequest, IngestionJob,
                          BuyerAccount)
 from app.core.taxonomy import all_categories, upsert_category
@@ -71,7 +71,8 @@ def leads(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
     if not u:
         return redirect("/login")
-    rows = session.exec(select(Lead).order_by(Lead.id.desc())).all()[:200]
+    leads = session.exec(select(Lead).order_by(Lead.id.desc())).all()[:200]
+    rows = [{"lead": l, "opted_out": lead_opted_out(session, l)} for l in leads]
     return templates.TemplateResponse("admin_leads.html", {
         "request": request, "user": u, "rows": rows})
 
