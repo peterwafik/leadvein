@@ -218,6 +218,27 @@ async function runJob() {
   es.addEventListener("error", () => { logLine("[stream closed]"); es.close(); });
 }
 
+// Admin-gated fetch: recipe management (create/test) may require admin Basic-auth
+// when ADMIN_PASSWORD is configured server-side. On 401, prompt once and retry.
+let ADMIN_AUTH = null;
+async function adminFetch(url, opts) {
+  const withAuth = () => ({
+    ...opts,
+    headers: { ...(opts.headers || {}), ...(ADMIN_AUTH ? { Authorization: ADMIN_AUTH } : {}) },
+  });
+  let res = await fetch(url, withAuth());
+  if (res.status === 401) {
+    const u = prompt("Admin username:", "admin");
+    if (u === null) return res;
+    const p = prompt("Admin password:");
+    if (p === null) return res;
+    ADMIN_AUTH = "Basic " + btoa(u + ":" + p);
+    res = await fetch(url, withAuth());
+    if (res.status === 401) { alert("Admin login failed."); ADMIN_AUTH = null; }
+  }
+  return res;
+}
+
 async function customRecipe() {
   const type = prompt("Type name (e.g. Calendly):");
   if (!type) return;
@@ -226,16 +247,19 @@ async function customRecipe() {
   const urlscan = prompt("urlscan query:", `domain:${fp}`) || `domain:${fp}`;
   const body = { category: "Custom", type, urlscan_query: urlscan,
                  verify_fingerprints: [fp] };
-  const test = await fetch("/api/recipes/test", {
+  const testRes = await adminFetch("/api/recipes/test", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...body, source: "urlscan" }),
-  }).then((r) => r.json());
+  });
+  if (!testRes.ok) return;  // 401 cancelled or failed
+  const test = await testRes.json();
   if (!confirm(`Test: ${test.matched}/${test.checked} candidates matched. Save recipe?`))
     return;
-  await fetch("/api/recipes", {
+  const createRes = await adminFetch("/api/recipes", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (!createRes.ok) return;
   await loadRecipes();
 }
 

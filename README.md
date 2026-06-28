@@ -37,6 +37,16 @@ Copy `.env.example` to `.env`. urlscan.io free search needs **no key**.
 - `PUBLICWWW_KEY` — required to use the PublicWWW discovery source.
 - `URLSCAN_KEY` — optional; raises urlscan rate limits.
 
+## Admin / access control (optional)
+Recipe management (creating + testing custom recipes) can be locked behind a single
+admin login. It is **opt-in**:
+- Leave `ADMIN_PASSWORD` blank → the app runs fully **open** (local default); anyone can
+  create/test recipes.
+- Set `ADMIN_PASSWORD` (and optionally `ADMIN_USER`, default `admin`) → creating/testing
+  recipes requires HTTP Basic auth with those credentials. The UI prompts for them on first
+  use. **Running jobs and downloading exports are never gated** — unauthenticated users are
+  "run-only". Credentials are read from the environment only, never hardcoded.
+
 ## Tests
 ```bash
 .venv/Scripts/python -m pytest -q

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
+import secrets
 import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.responses import (FileResponse, StreamingResponse, Response,
                                JSONResponse)
 from fastapi.staticfiles import StaticFiles
@@ -34,6 +36,31 @@ JOBS: dict[str, dict] = {}
 FETCH_OVERRIDE = None  # tests may set this to bypass network
 
 
+# --- admin auth (opt-in) ----------------------------------------------------
+# Recipe management (create/test) is gated behind a single admin login whose
+# credentials come from the environment (ADMIN_USER / ADMIN_PASSWORD), never
+# hardcoded. If ADMIN_PASSWORD is unset/empty the app runs OPEN (local default)
+# and admin routes are ungated. Running jobs + downloading exports are NEVER
+# gated — unauthenticated users are "run-only". Read at request time so the
+# mode can change without a restart (and so tests can set it via env).
+def require_admin(request: Request) -> None:
+    password = os.getenv("ADMIN_PASSWORD") or ""
+    if not password:
+        return  # auth disabled — open/local mode
+    user = os.getenv("ADMIN_USER") or "admin"
+    header = request.headers.get("Authorization", "")
+    if header.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(header[6:]).decode("utf-8")
+            u, _, p = decoded.partition(":")
+        except Exception:
+            u = p = ""
+        if secrets.compare_digest(u, user) and secrets.compare_digest(p, password):
+            return
+    raise HTTPException(status_code=401, detail="admin authentication required",
+                        headers={"WWW-Authenticate": "Basic"})
+
+
 def _recipe_dict(recipe_id: str) -> dict | None:
     with Session(engine) as s:
         r = s.get(Recipe, recipe_id)
@@ -59,7 +86,7 @@ def list_recipes():
     return {"recipes": recipes, "grouped": grouped}
 
 
-@app.post("/api/recipes")
+@app.post("/api/recipes", dependencies=[Depends(require_admin)])
 def create_recipe(body: RecipeCreate):
     rid = body.type.lower().replace(" ", "_") + "_" + uuid.uuid4().hex[:6]
     with Session(engine) as s:
@@ -75,7 +102,7 @@ def create_recipe(body: RecipeCreate):
     return _recipe_dict(rid)
 
 
-@app.post("/api/recipes/test")
+@app.post("/api/recipes/test", dependencies=[Depends(require_admin)])
 def test_recipe(body: TestRecipeRequest):
     recipe = engine_recipe_from_api(body.model_dump())
     try:

@@ -1,3 +1,5 @@
+import base64
+
 from fastapi.testclient import TestClient
 
 import app.main as main
@@ -5,6 +7,53 @@ import app.main as main
 
 def client():
     return TestClient(main.app)
+
+
+def _basic(user, pw):
+    return "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
+
+
+CUSTOM_BODY = {"category": "Custom", "type": "AuthTest",
+               "urlscan_query": "domain:x.com", "verify_fingerprints": ["x.com"]}
+
+
+def test_recipe_management_open_when_no_admin_password(monkeypatch):
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    c = client()
+    r = c.post("/api/recipes", json=CUSTOM_BODY)
+    assert r.status_code == 200  # open/local mode — no auth required
+
+
+def test_recipe_management_locked_when_admin_password_set(monkeypatch):
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "s3cret")
+    c = client()
+    # no credentials -> 401
+    assert c.post("/api/recipes", json=CUSTOM_BODY).status_code == 401
+    # wrong credentials -> 401
+    bad = {"Authorization": _basic("admin", "nope")}
+    assert c.post("/api/recipes", json=CUSTOM_BODY, headers=bad).status_code == 401
+    # correct credentials -> 200
+    ok = {"Authorization": _basic("admin", "s3cret")}
+    assert c.post("/api/recipes", json=CUSTOM_BODY, headers=ok).status_code == 200
+    # recipe/test is gated the same way
+    assert c.post("/api/recipes/test", json={"urlscan_query": "domain:x.com",
+                  "verify_fingerprints": ["x.com"]}).status_code == 401
+
+
+def test_jobs_are_run_only_not_admin_gated(monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "s3cret")
+    main.FETCH_OVERRIDE = lambda url, **k: (url, "<html><title>x</title></html>")
+    try:
+        c = client()
+        # running a job needs NO admin auth even when auth is enabled
+        r = c.post("/api/jobs", json={"recipe_id": "gloriafood",
+                   "manual_hosts": ["x.com"], "delay": 0.0})
+        assert r.status_code == 200
+        # listing recipes also stays open
+        assert c.get("/api/recipes").status_code == 200
+    finally:
+        main.FETCH_OVERRIDE = None
 
 
 def test_recipes_endpoint_lists_builtins():
