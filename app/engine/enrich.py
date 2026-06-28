@@ -11,9 +11,12 @@ USER_AGENT = ("LeadScraper/0.1 (+https://example.com/contact; "
               "youssef.zaki@student.giu-uni.de)")
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico")
-TRACKING_TOKENS = ("fbgcdn", "sentry", "wixpress", "cloudflare", "gstatic",
-                   "googleapis", "w3.org", "schema.org", "example.com",
-                   "sentry.io", "cloudfront")
+# Universal junk/infra domains that are never a real business contact — platform-AGNOSTIC.
+# Per-recipe vendor hosts (e.g. fbgcdn for GloriaFood, cdn.shopify.com for Shopify) are added
+# dynamically from the recipe in analyse(); they MUST NOT be hardcoded here.
+GLOBAL_EMAIL_BLOCKLIST = ("sentry", "wixpress", "cloudflare", "gstatic",
+                          "googleapis", "w3.org", "schema.org",
+                          "sentry.io", "cloudfront")
 
 PLACEHOLDER_EMAILS = {
     "user@domain.com", "name@domain.com", "email@domain.com",
@@ -59,14 +62,16 @@ def norm_url(host_or_url: str) -> str:
     return s
 
 
-def _clean_emails(candidates: list[str]) -> list[str]:
+def _clean_emails(candidates: list[str], extra_blocklist: tuple = ()) -> list[str]:
+    # global junk + the current recipe's own vendor/exclude hosts (added by analyse)
+    blocklist = tuple(GLOBAL_EMAIL_BLOCKLIST) + tuple(t.lower() for t in extra_blocklist)
     out: list[str] = []
     for e in candidates:
         e = e.strip().strip(".,;:").lower()
         low = e.lower()
         if low.endswith(IMAGE_EXTS):
             continue
-        if any(tok in low for tok in TRACKING_TOKENS):
+        if any(tok in low for tok in blocklist):
             continue
         if e in PLACEHOLDER_EMAILS:
             continue
@@ -109,7 +114,12 @@ def analyse(recipe, url: str, html: str) -> LeadData:
         if href.lower().startswith("mailto:"):
             email_candidates.append(href[7:].split("?")[0])
     email_candidates += EMAIL_RE.findall(html)
-    lead.emails = _clean_emails(email_candidates)
+    # the recipe's own vendor hosts (exclude_hosts + fingerprints) are filtered out of
+    # emails too — so each platform drops its own infra addresses, GloriaFood-agnostically
+    recipe_email_blocklist = tuple(
+        t.lower() for t in (list(recipe.exclude_hosts) + list(recipe.verify_fingerprints))
+    )
+    lead.emails = _clean_emails(email_candidates, recipe_email_blocklist)
 
     phones: list[str] = []
     for a in soup.find_all("a", href=True):

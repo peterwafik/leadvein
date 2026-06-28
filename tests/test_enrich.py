@@ -68,6 +68,25 @@ def test_analyse_not_confirmed_when_absent():
     assert lead.matched == ""
 
 
+def test_email_blocklist_is_generalized_not_gloriafood_specific():
+    from app.engine.enrich import GLOBAL_EMAIL_BLOCKLIST
+    # the GLOBAL blocklist must be platform-agnostic — no GloriaFood vendor token
+    assert "fbgcdn" not in GLOBAL_EMAIL_BLOCKLIST
+    # GloriaFood still drops its own vendor emails, via its recipe tokens (not the global list)
+    gf_html = ('<html><title>x</title><body>hi@diner.com noreply@fbgcdn.com'
+               '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script></body></html>')
+    gf_lead = analyse(GF, "https://diner.com/", gf_html)
+    assert "hi@diner.com" in gf_lead.emails
+    assert not any("fbgcdn" in e for e in gf_lead.emails)
+    # a DIFFERENT recipe drops ITS OWN vendor emails the same way (no GF leakage)
+    shop = get_builtin("shopify")
+    shop_html = ('<html><title>s</title><body>real@store.com junk@cdn.shopify.com'
+                 '<script src="https://cdn.shopify.com/x.js"></script></body></html>')
+    shop_lead = analyse(shop, "https://store.com/", shop_html)
+    assert "real@store.com" in shop_lead.emails
+    assert not any("shopify" in e for e in shop_lead.emails)
+
+
 def test_analyse_extractor_without_capture_group_is_safe():
     from app.engine.recipes import Recipe
     # extractor pattern with NO capture group must not raise
