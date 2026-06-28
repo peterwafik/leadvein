@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlmodel import Session
 
-from app.core.compliance import is_suppressed, host_of
+from app.core.compliance import is_suppressed, is_opted_out, host_of
 from app.core.masking import mask_preview, is_owned
 from app.core.recipes import matching_leads
 
@@ -19,6 +19,8 @@ def search(session: Session, buyer_account_id: int, filters: dict) -> list[dict]
     out = []
     for l in leads:
         if not _not_suppressed(session, buyer_account_id, l):
+            continue
+        if is_opted_out(session, domain=host_of(l.website_url), phone=l.phone, email=l.public_email):
             continue
         preview = mask_preview(l)
         preview["already_owned"] = is_owned(session, buyer_account_id, l.id)

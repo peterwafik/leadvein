@@ -84,7 +84,7 @@ def unlock(request: Request, lead_id: int, session: Session = Depends(get_sessio
         unlock_lead(session, u, lead_id)
     except ComplianceNotAcknowledged:
         return redirect("/app/ack")
-    except (InsufficientCredits, LeadSuppressed):
+    except (InsufficientCredits, LeadSuppressed, ValueError):
         return redirect("/app/marketplace")
     return redirect("/app/purchased")
 

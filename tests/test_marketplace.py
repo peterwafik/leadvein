@@ -19,6 +19,23 @@ def _seed(s):
     s.commit()
 
 
+def test_search_excludes_opted_out_leads():
+    import json
+    from sqlmodel import Session
+    from app.core.db import init_db, Lead, _now, OptOutRequest
+    from app.core.marketplace import search
+    from app.core.recipes import DEFAULT_FILTERS
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        s.add(Lead(business_name="OptedOutBiz", category_keys_json=json.dumps(["restaurant"]),
+                   city="London", phone="1", website_url="https://gone.com", score_total=90,
+                   date_last_verified=_now(), opt_out_status="clear"))  # column says clear...
+        s.add(OptOutRequest(kind="domain", value="gone.com", applied=True))  # ...but opted out
+        s.commit()
+        f = {**DEFAULT_FILTERS, "categories": ["restaurant"], "city": "London"}
+        assert search(s, 1, f) == []   # excluded from search despite the stale column
+
+
 def test_search_excludes_suppressed_and_masks():
     engine = init_db("sqlite://")
     with Session(engine) as s:
