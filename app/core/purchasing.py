@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.compliance import is_suppressed, is_opted_out, host_of, audit
@@ -16,6 +17,12 @@ class LeadSuppressed(ValueError):
 
 class ComplianceNotAcknowledged(ValueError):
     pass
+
+
+def _existing_purchase(session, buyer_account_id, lead_id):
+    return session.exec(select(PurchasedLead).where(
+        PurchasedLead.buyer_account_id == buyer_account_id,
+        PurchasedLead.lead_id == lead_id)).first()
 
 
 def grant_credits(session: Session, buyer_account_id: int, amount: int,
@@ -37,11 +44,9 @@ def unlock_lead(session: Session, user, lead_id: int) -> PurchasedLead:
     ba = session.get(BuyerAccount, user.buyer_account_id)
     if not ba or not ba.compliance_ack_at:
         raise ComplianceNotAcknowledged("compliance acknowledgement required")
-    existing = session.exec(select(PurchasedLead).where(
-        PurchasedLead.buyer_account_id == ba.id,
-        PurchasedLead.lead_id == lead_id)).first()
+    existing = _existing_purchase(session, ba.id, lead_id)
     if existing:
-        return existing  # idempotent re-buy, no double charge
+        return existing  # idempotent re-buy, no charge (owned even if credits now low)
     lead = session.get(Lead, lead_id)
     if lead is None:
         raise ValueError("lead not found")
@@ -63,7 +68,13 @@ def unlock_lead(session: Session, user, lead_id: int) -> PurchasedLead:
     session.add(lead)
     purchase = PurchasedLead(buyer_account_id=ba.id, lead_id=lead_id, price_credits=price)
     session.add(purchase)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()  # undoes the debit + credit-txn + times_sold
+        return session.exec(select(PurchasedLead).where(
+            PurchasedLead.buyer_account_id == ba.id,
+            PurchasedLead.lead_id == lead_id)).first()
     session.refresh(purchase)
     audit(session, user.id, "unlock", "Lead", str(lead_id),
           {"price": price, "buyer_account_id": ba.id})

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel, create_engine
 
 
@@ -113,6 +114,8 @@ class LeadRecipe(SQLModel, table=True):
 
 class PurchasedLead(SQLModel, table=True):
     __tablename__ = "lv_purchased_lead"
+    __table_args__ = (UniqueConstraint("buyer_account_id", "lead_id",
+                                       name="uq_lv_purchased_buyer_lead"),)
     id: int | None = Field(default=None, primary_key=True)
     buyer_account_id: int = Field(index=True)
     lead_id: int = Field(index=True)

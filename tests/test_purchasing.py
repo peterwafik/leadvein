@@ -65,3 +65,33 @@ def test_suppressed_or_optout_blocked():
         s.commit()
         with pytest.raises(LeadSuppressed):
             unlock_lead(s, u, lead.id)
+
+
+def test_db_unique_constraint_blocks_duplicate_purchase():
+    from sqlalchemy.exc import IntegrityError
+    from sqlmodel import Session
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        s.add(PurchasedLead(buyer_account_id=1, lead_id=5)); s.commit()
+        s.add(PurchasedLead(buyer_account_id=1, lead_id=5))
+        with pytest.raises(IntegrityError):
+            s.commit()
+
+
+def test_unlock_handles_concurrent_duplicate(monkeypatch):
+    from sqlmodel import Session, select
+    import app.core.purchasing as P
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        ba, u, lead = _setup(s)  # 10 credits, acked, lead price 3
+        # simulate a competing purchase that the pre-check does NOT see (the race window)
+        s.add(PurchasedLead(buyer_account_id=ba.id, lead_id=lead.id, price_credits=3))
+        s.commit()
+        monkeypatch.setattr(P, "_existing_purchase", lambda *a, **k: None)  # pre-check blind
+        result = P.unlock_lead(s, u, lead.id)   # insert -> IntegrityError -> rollback -> return existing
+        assert result is not None
+        assert P.balance(s, ba.id) == 10        # NOT charged (rolled back). Old code: 7 + 2 rows.
+        rows = s.exec(select(PurchasedLead).where(
+            PurchasedLead.buyer_account_id == ba.id,
+            PurchasedLead.lead_id == lead.id)).all()
+        assert len(rows) == 1
