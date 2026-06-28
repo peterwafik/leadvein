@@ -10,29 +10,65 @@ let currentJob = null;
 
 const $ = (id) => document.getElementById(id);
 
+// Region presets: filter the Type list to a market's popular platforms + auto-fill
+// Country. UI-only convenience — does NOT geo-filter the scraped leads. ids=null => all.
+const REGION_PRESETS = {
+  Global: { country: "", ids: null },
+  US: { country: "US", ids: ["shopify","woocommerce","bigcommerce","toast","chownow","slice","square","authorizenet","affirm","sezzle","stripe_checkout","paypal_buttons","hubspot","intercom","drift","calendly","acuity","housecallpro","mindbody","mailchimp","klaviyo","gtm","hotjar","squarespace","wix","webflow","godaddy","trustpilot","typeform"] },
+  UK: { country: "GB", ids: ["shopify","woocommerce","bigcommerce","flipdish","gloriafood","gocardless","worldpay","clearpay","stripe_checkout","paypal_buttons","calendly","acuity","simplybook","trustpilot","intercom","tawkto","mailchimp","klaviyo","wix","squarespace","godaddy","typeform"] },
+  EU: { country: "", ids: ["shopify","woocommerce","prestashop","gloriafood","flipdish","mollie","adyen","klarna","stripe_checkout","gocardless","calendly","calcom","typeform","mailchimp","klaviyo","wix","squarespace","jimdo","trustpilot"] },
+  CA: { country: "CA", ids: ["shopify","woocommerce","bigcommerce","square","stripe_checkout","paypal_buttons","calendly","acuity","mailchimp","klaviyo","wix","squarespace","hubspot","intercom"] },
+  AU: { country: "AU", ids: ["shopify","woocommerce","square","clearpay","stripe_checkout","paypal_buttons","calendly","acuity","mailchimp","wix","squarespace","hubspot","typeform"] },
+};
+
+function presetSet() {
+  const p = REGION_PRESETS[$("region").value];
+  return p && p.ids ? new Set(p.ids) : null;  // null => no filtering
+}
+
 async function loadRecipes() {
   const res = await fetch("/api/recipes");
   const data = await res.json();
   RECIPES = data.recipes;
   GROUPED = data.grouped;
+  populateCategories();
+}
+
+function populateCategories() {
+  const set = presetSet();
   const cat = $("category");
+  const prev = cat.value;
   cat.innerHTML = "";
   Object.keys(GROUPED).forEach((c) => {
+    const types = GROUPED[c].filter((r) => !set || set.has(r.id));
+    if (types.length === 0) return;  // hide categories with no preset types
     const o = document.createElement("option");
     o.value = c; o.textContent = c; cat.appendChild(o);
   });
+  if (prev && [...cat.options].some((o) => o.value === prev)) cat.value = prev;
   populateTypes();
 }
 
 function populateTypes() {
+  const set = presetSet();
   const cat = $("category").value;
   const type = $("type");
   type.innerHTML = "";
-  (GROUPED[cat] || []).forEach((r) => {
-    const o = document.createElement("option");
-    o.value = r.id; o.textContent = r.type; type.appendChild(o);
-  });
+  (GROUPED[cat] || [])
+    .filter((r) => !set || set.has(r.id))
+    .forEach((r) => {
+      const o = document.createElement("option");
+      o.value = r.id; o.textContent = r.type; type.appendChild(o);
+    });
   showFingerprints();
+}
+
+function onRegionChange() {
+  const region = $("region").value;
+  const p = REGION_PRESETS[region];
+  $("country").value = p.country || "";
+  $("regionNote").classList.toggle("hidden", region === "Global");
+  populateCategories();
 }
 
 function selectedRecipe() {
@@ -204,6 +240,7 @@ async function customRecipe() {
 }
 
 function wire() {
+  $("region").addEventListener("change", onRegionChange);
   $("category").addEventListener("change", populateTypes);
   $("type").addEventListener("change", showFingerprints);
   $("limit").addEventListener("input", () => $("limitVal").textContent = $("limit").value);
