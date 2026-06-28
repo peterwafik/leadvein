@@ -43,6 +43,7 @@ def test_ingest_dedupes_scores_and_respects_optout():
                         categories=["restaurant", "cafe"]),
                         scoring_profile_key="utility_energy", enrich_fn=_fake_enrich)
         assert counts["discovered"] == 3
+        assert counts["normalized"] == 3
         assert counts["skipped_duplicate"] == 1     # Joe Diner Dup
         assert counts["skipped_compliance"] == 1    # optout.com
         assert counts["stored"] == 1

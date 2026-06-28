@@ -2,24 +2,16 @@ from __future__ import annotations
 
 import json
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.adapters.base import AdapterQuery, NormalizedLead
 from app.core.compliance import host_of, is_opted_out, audit
-from app.core.db import Lead, LeadSource, IngestionJob, _now
+from app.core.db import Lead, IngestionJob, _now
 from app.core.dedup import dedupe_key, find_existing
+from app.core.sources import ensure_source
 from app.enrich.website import enrich_website
 from app.scoring.engine import score
 from app.scoring.profiles import registry as profile_registry
-
-
-def _ensure_source(session: Session, adapter) -> None:
-    m = adapter.meta
-    if not session.exec(select(LeadSource).where(LeadSource.key == m.key)).first():
-        session.add(LeadSource(key=m.key, name=m.name, type=m.type, url=m.url,
-                               license=m.license, terms_status=m.terms_status,
-                               regions_json=json.dumps(m.regions)))
-        session.commit()
 
 
 def _lead_context(n: NormalizedLead, enrichment: dict) -> dict:
@@ -33,10 +25,11 @@ def _lead_context(n: NormalizedLead, enrichment: dict) -> dict:
 
 def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_key: str,
            enrich_fn=enrich_website, actor_user_id=None) -> dict:
-    _ensure_source(session, adapter)
+    ensure_source(session, adapter.meta)
     profile = profile_registry.get(scoring_profile_key)
     counts = {"discovered": 0, "normalized": 0, "stored": 0,
               "skipped_duplicate": 0, "skipped_compliance": 0}
+    seen_in_run: set[str] = set()
 
     for raw in adapter.discover(query):
         counts["discovered"] += 1
@@ -45,9 +38,10 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             continue
         counts["normalized"] += 1
         key = dedupe_key(n)
-        if find_existing(session, key):
+        if key in seen_in_run or find_existing(session, key):
             counts["skipped_duplicate"] += 1
             continue
+        seen_in_run.add(key)
         domain = host_of(n.website_url)
         if is_opted_out(session, domain=domain, phone=n.phone, email=n.public_email):
             counts["skipped_compliance"] += 1
