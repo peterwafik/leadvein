@@ -55,6 +55,7 @@ def test_ingest_dedupes_scores_and_respects_optout():
         assert lead.source_key == "fake_src"
         assert lead.source_license == "TESTLIC"
         assert lead.scoring_profile_key == "utility_energy"
+        assert lead.attribution == "fake attribution"   # FakeAdapter.attribution() persisted
         # source row + ingestion job recorded
         assert s.exec(select(LeadSource).where(LeadSource.key == "fake_src")).first()
         assert s.exec(select(IngestionJob)).first().status == "done"

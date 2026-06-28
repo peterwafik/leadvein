@@ -88,6 +88,7 @@ class Lead(SQLModel, table=True):
     source_name: str = ""
     source_url: str = ""
     source_license: str = ""
+    attribution: str = ""
     lawful_basis: str = "legitimate_interest_b2b_public"
     date_discovered: str = Field(default_factory=_now)
     date_last_verified: str | None = None

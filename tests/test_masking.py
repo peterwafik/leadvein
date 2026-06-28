@@ -28,6 +28,11 @@ def test_unlock_view_has_contact():
     assert u["source_license"] == "ODbL"
 
 
+def test_unlock_view_includes_attribution():
+    lead = Lead(business_name="D", attribution="© OpenStreetMap contributors, ODbL")
+    assert unlock_view(lead)["attribution"] == "© OpenStreetMap contributors, ODbL"
+
+
 def test_ownership_guard():
     engine = init_db("sqlite://")
     with Session(engine) as s:

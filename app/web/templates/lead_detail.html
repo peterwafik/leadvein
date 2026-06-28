@@ -13,6 +13,7 @@
     <div><b>Source:</b> {{ lead.source_name }}</div>
     <div><b>Source URL:</b> <a class="text-emerald-600 underline" href="{{ lead.source_url if lead.source_url.startswith('http') else '#' }}" target="_blank" rel="noopener">{{ lead.source_url }}</a></div>
     <div><b>License:</b> {{ lead.source_license }}</div>
+    <div><b>Attribution:</b> {{ lead.attribution }}</div>
     <div><b>Lawful basis:</b> {{ lead.lawful_basis }}</div>
     <div><b>Verified:</b> {{ lead.date_last_verified }}</div>
   </div>

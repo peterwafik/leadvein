@@ -10,7 +10,7 @@ from app.engine.export import rows_to_csv
 EXPORT_COLUMNS = ["business_name", "phone", "public_email", "website_url",
                   "address_line1", "city", "region", "postal_code", "country",
                   "category_keys", "score_total", "score_explanation",
-                  "source_name", "source_url", "source_license",
+                  "source_name", "source_url", "source_license", "attribution",
                   "date_last_verified", "lawful_basis"]
 
 

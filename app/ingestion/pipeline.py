@@ -66,6 +66,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             source_key=n.source_key or adapter.meta.key, source_name=adapter.meta.name,
             source_url=n.source_url or adapter.meta.url,
             source_license=n.source_license or adapter.meta.license,
+            attribution=adapter.attribution(),
             date_last_verified=_now(), dedupe_key=key))
         counts["stored"] += 1
 

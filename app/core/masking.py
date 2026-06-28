@@ -39,7 +39,7 @@ def unlock_view(lead: Lead) -> dict:
         "subscores": json.loads(lead.subscores_json or "{}"),
         "score_explanation": lead.score_explanation,
         "source_name": lead.source_name, "source_url": lead.source_url,
-        "source_license": lead.source_license, "lawful_basis": lead.lawful_basis,
+        "source_license": lead.source_license, "attribution": lead.attribution, "lawful_basis": lead.lawful_basis,
         "date_last_verified": lead.date_last_verified,
     }
 
