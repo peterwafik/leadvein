@@ -47,6 +47,7 @@ class Lead(SQLModel, table=True):
     address: str = ""
     country: str = ""
     socials_json: str = "{}"
+    platform: str = ""
     source_query: str = ""
     found_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     status: str = "Not contacted"

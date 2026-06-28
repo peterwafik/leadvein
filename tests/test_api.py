@@ -125,6 +125,37 @@ def test_recipe_test_survives_enrich_error(monkeypatch):
         main.FETCH_OVERRIDE = None
 
 
+def test_job_results_persist_in_db_after_runtime_evicted():
+    # leads must survive loss of the in-memory JOBS dict (i.e. a server restart)
+    def fake_fetch(url, **kwargs):
+        return url, ('<html><title>Mario</title><body>'
+                     '<script src="https://fbgcdn.com/embedder/js/ewm2.js"></script>'
+                     '<a href="mailto:info@marios.com">e</a></body></html>')
+
+    main.FETCH_OVERRIDE = fake_fetch
+    try:
+        c = client()
+        job_id = c.post("/api/jobs", json={"recipe_id": "gloriafood",
+                        "manual_hosts": ["marios.com"], "delay": 0.0,
+                        "only_confirmed": True}).json()["job_id"]
+        with c.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
+            "".join(resp.iter_text())
+        # simulate a restart: drop all in-memory runtime state for the job
+        main.JOBS.pop(job_id, None)
+        # download still works — served from the DB
+        r = c.get(f"/api/jobs/{job_id}/results.csv")
+        assert r.status_code == 200
+        assert "marios.com" in r.text
+        # job shows up in history with persisted status + lead count
+        jobs = c.get("/api/jobs").json()["jobs"]
+        mine = next(j for j in jobs if j["id"] == job_id)
+        assert mine["status"] == "done"
+        assert mine["lead_count"] >= 1
+        assert mine["type"] == "GloriaFood"
+    finally:
+        main.FETCH_OVERRIDE = None
+
+
 def test_restream_completed_job_returns_409():
     def fake_fetch(url, **kwargs):
         return url, "<html><title>x</title></html>"

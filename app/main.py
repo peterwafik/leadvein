@@ -12,9 +12,9 @@ from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.responses import (FileResponse, StreamingResponse, Response,
                                JSONResponse)
 from fastapi.staticfiles import StaticFiles
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from app.db import init_db, seed_builtins, all_recipes, Recipe
+from app.db import init_db, seed_builtins, all_recipes, Recipe, Job, Lead
 from app.engine.discover import discover
 from app.engine.enrich import fetch, analyse, norm_url
 from app.engine.export import rows_to_csv, rows_to_xlsx, append_xlsx
@@ -146,7 +146,17 @@ def create_job(body: JobCreate):
     )
     job_id = uuid.uuid4().hex
     JOBS[job_id] = {"recipe": recipe, "config": config, "columns": columns,
-                    "rows": [], "status": "pending", "totals": {}}
+                    "status": "pending", "totals": {}}
+    filters = {"keyword": body.keyword, "country": body.country,
+               "limit": config.limit, "delay": config.delay,
+               "concurrency": config.concurrency,
+               "only_confirmed": config.only_confirmed,
+               "manual_hosts": len(config.manual_hosts)}
+    with Session(engine) as s:
+        s.add(Job(id=job_id, recipe_id=body.recipe_id, source=body.source,
+                  filters_json=json.dumps(filters), columns_json=json.dumps(columns),
+                  status="pending", totals_json="{}"))
+        s.commit()
     return {"job_id": job_id}
 
 
@@ -161,37 +171,110 @@ async def stream_job(job_id: str):
     async def event_gen():
         job["status"] = "running"
         fetch_fn = FETCH_OVERRIDE or fetch
+        _set_job_status(job_id, "running")
         # run_job defaults discover_fn to discover_meta (real network); when the
-        # job carries manual_hosts, discovery is bypassed entirely.
-        try:
-            async for ev in run_job(job["recipe"], job["config"],
-                                    fetch_fn=fetch_fn):
-                if ev["type"] == "lead":
-                    job["rows"].append(ev["lead"])
-                if ev["type"] == "done":
-                    job["status"] = "done"
-                    job["totals"] = ev["totals"]
-                yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
-        except Exception as e:  # surface engine errors to the client
-            job["status"] = "error"
-            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+        # job carries manual_hosts, discovery is bypassed entirely. Leads are
+        # persisted to the DB as they arrive, so results survive a restart.
+        with Session(engine) as s:
+            try:
+                async for ev in run_job(job["recipe"], job["config"],
+                                        fetch_fn=fetch_fn):
+                    if ev["type"] == "lead":
+                        s.add(_lead_from_row(job_id, ev["lead"]))
+                        s.commit()
+                    if ev["type"] == "done":
+                        job["status"] = "done"
+                        job["totals"] = ev["totals"]
+                        _set_job_status(job_id, "done", ev["totals"], session=s)
+                    yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
+            except Exception as e:  # surface engine errors to the client
+                job["status"] = "error"
+                _set_job_status(job_id, "error", session=s)
+                yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
     return StreamingResponse(event_gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache",
                                       "X-Accel-Buffering": "no"})
 
 
-def _job_rows(job_id: str):
-    job = JOBS.get(job_id)
-    if not job:
-        raise HTTPException(404, "job not found")
-    return job
+_LEAD_FIELDS = ["name", "website", "on_platform", "matched", "email",
+                "emails_all", "phone", "phones_all", "address", "country",
+                "platform", "source_query", "status", "notes"]
+
+
+def _lead_from_row(job_id: str, row: dict) -> Lead:
+    # map the runner's column-keyed lead dict onto a Lead row (display strings
+    # for ids/socials are stored in the *_json columns).
+    return Lead(
+        job_id=job_id,
+        ids_json=row.get("ids", ""), socials_json=row.get("socials", ""),
+        **{f: row.get(f, "") for f in _LEAD_FIELDS},
+    )
+
+
+def _lead_to_rowdict(l: Lead) -> dict:
+    d = {f: getattr(l, f) for f in _LEAD_FIELDS}
+    d["ids"] = l.ids_json
+    d["socials"] = l.socials_json
+    return d
+
+
+def _set_job_status(job_id: str, status: str, totals: dict | None = None,
+                    session: Session | None = None) -> None:
+    own = session is None
+    s = session or Session(engine)
+    try:
+        db_job = s.get(Job, job_id)
+        if db_job:
+            db_job.status = status
+            if totals is not None:
+                db_job.totals_json = json.dumps(totals)
+            s.add(db_job)
+            s.commit()
+    finally:
+        if own:
+            s.close()
+
+
+def _load_job_for_download(job_id: str):
+    """Read a job's columns, sheet name, and lead rows from the DB."""
+    with Session(engine) as s:
+        db_job = s.get(Job, job_id)
+        if not db_job:
+            raise HTTPException(404, "job not found")
+        columns = json.loads(db_job.columns_json or "[]") or list(DEFAULT_COLUMNS)
+        rec = s.get(Recipe, db_job.recipe_id)
+        sheet = f"{(rec.type if rec else 'Leads')} Prospects"
+        leads = s.exec(select(Lead).where(Lead.job_id == job_id)
+                       .order_by(Lead.id)).all()
+        rows = [_lead_to_rowdict(l) for l in leads]
+    return columns, sheet, rows
+
+
+@app.get("/api/jobs")
+def list_jobs():
+    with Session(engine) as s:
+        jobs = s.exec(select(Job).order_by(Job.created_at.desc())).all()
+        recipe_types = {r.id: r.type for r in s.exec(select(Recipe)).all()}
+        out = []
+        for j in jobs:
+            n = len(s.exec(select(Lead.id).where(Lead.job_id == j.id)).all())
+            out.append({
+                "id": j.id, "recipe_id": j.recipe_id,
+                "type": recipe_types.get(j.recipe_id, j.recipe_id),
+                "source": j.source, "status": j.status,
+                "created_at": j.created_at,
+                "totals": json.loads(j.totals_json or "{}"),
+                "filters": json.loads(j.filters_json or "{}"),
+                "lead_count": n,
+            })
+    return {"jobs": out}
 
 
 @app.get("/api/jobs/{job_id}/results.csv")
 def results_csv(job_id: str):
-    job = _job_rows(job_id)
-    data = rows_to_csv(job["columns"], job["rows"])
+    columns, _sheet, rows = _load_job_for_download(job_id)
+    data = rows_to_csv(columns, rows)
     return Response(content=data, media_type="text/csv",
                     headers={"Content-Disposition":
                              f'attachment; filename="leads_{job_id}.csv"'})
@@ -199,9 +282,8 @@ def results_csv(job_id: str):
 
 @app.get("/api/jobs/{job_id}/results.xlsx")
 def results_xlsx(job_id: str):
-    job = _job_rows(job_id)
-    sheet = f"{job['recipe'].type} Prospects"
-    data = rows_to_xlsx(sheet, job["columns"], job["rows"])
+    columns, sheet, rows = _load_job_for_download(job_id)
+    data = rows_to_xlsx(sheet, columns, rows)
     return Response(
         content=data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -210,10 +292,9 @@ def results_xlsx(job_id: str):
 
 @app.post("/api/jobs/{job_id}/append")
 async def append_tracker(job_id: str, file: UploadFile = File(...)):
-    job = _job_rows(job_id)
+    _columns, sheet, rows = _load_job_for_download(job_id)
     existing = await file.read()
-    sheet = f"{job['recipe'].type} Prospects"
-    merged = append_xlsx(existing, sheet, job["rows"])
+    merged = append_xlsx(existing, sheet, rows)
     return Response(
         content=merged,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
