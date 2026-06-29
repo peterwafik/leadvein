@@ -90,6 +90,15 @@ Architecture: source-agnostic `app/core/` marketplace core + pluggable `app/adap
 (OSM/Overpass, urlscan-fingerprint) + `app/scoring/profiles/` (utility_energy is one profile).
 Adding a data source = adding an adapter; adding a vertical = adding a scoring profile.
 
+### Production / pilot deployment
+
+Set `LEADVAULT_ENV=prod` and the app enforces hardening:
+- `LEADVAULT_SECRET` MUST be set to a strong random value (e.g. `python -c "import secrets;print(secrets.token_urlsafe(48))"`) — the app refuses to start on the dev default.
+- Session cookies are issued `Secure` + `HttpOnly` + `SameSite=Lax` (serve over HTTPS / behind a TLS-terminating proxy).
+- Tracebacks are never shown to clients (`debug=False`).
+- The demo buyer is NOT seeded; the admin is seeded only from `LEADVAULT_ADMIN_EMAIL` + `LEADVAULT_ADMIN_PASSWORD` (rotate off the dev `admin12345` default). If unset, no admin is created and a warning is logged — create one out of band.
+Run behind HTTPS, e.g. `uvicorn app.leadvault:app --host 0.0.0.0 --port 8000` fronted by a TLS proxy.
+
 ### Billing (Stripe credit packs)
 
 Buyers can buy credit packs via Stripe Checkout. It is OFF until configured:

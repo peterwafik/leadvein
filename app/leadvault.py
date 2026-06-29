@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
 from starlette.middleware.sessions import SessionMiddleware
 
+import app.core.config as config
 from app.core.db import init_db, User, BuyerAccount
 from app.core.auth import create_user
 from app.seed import seed_all
@@ -17,9 +18,8 @@ from app.web.routes_buyer import router as buyer_router
 from app.web.routes_billing import router as billing_router
 from app.web.routes_public import router as public_router
 
-app = FastAPI(title="LeadVault")
-app.add_middleware(SessionMiddleware,
-                   secret_key=os.getenv("LEADVAULT_SECRET", "dev-leadvault-secret"))
+app = FastAPI(title="LeadVault", debug=False)
+app.add_middleware(SessionMiddleware, **config.session_kwargs())
 
 engine = init_db(os.getenv("LEADVAULT_DB", "sqlite:///leadvault.db"))
 deps.set_engine(engine)
@@ -28,14 +28,19 @@ deps.set_engine(engine)
 def _seed_accounts() -> None:
     with Session(engine) as s:
         seed_all(s)
-        if not s.exec(select(User).where(User.role == "admin")).first():
-            create_user(s, "admin@leadvault.local",
-                        os.getenv("LEADVAULT_ADMIN_PW", "admin12345"), role="admin")
-        if not s.exec(select(User).where(User.email == "buyer@demo.local")).first():
-            ba = BuyerAccount(company_name="Demo Buyer", credits=100)
-            s.add(ba); s.commit(); s.refresh(ba)
-            create_user(s, "buyer@demo.local", "buyer12345", role="buyer",
-                        buyer_account_id=ba.id)
+        creds = config.admin_credentials()
+        if creds is not None:
+            admin_email, admin_pw = creds
+            if not s.exec(select(User).where(User.email == admin_email)).first():
+                create_user(s, admin_email, admin_pw, role="admin")
+        else:
+            print("WARNING: LEADVAULT_ADMIN_EMAIL/PASSWORD not set; no admin seeded")
+        if config.seed_demo_buyer():
+            if not s.exec(select(User).where(User.email == "buyer@demo.local")).first():
+                ba = BuyerAccount(company_name="Demo Buyer", credits=100)
+                s.add(ba); s.commit(); s.refresh(ba)
+                create_user(s, "buyer@demo.local", "buyer12345", role="buyer",
+                            buyer_account_id=ba.id)
 
 
 _seed_accounts()
