@@ -143,3 +143,13 @@ def test_webhook_bad_signature_returns_400(monkeypatch):
     r = _client().post("/stripe/webhook", content=b"{}",
                        headers={"Stripe-Signature": "bad"})
     assert r.status_code == 400
+
+
+def test_webhook_ignores_malformed_metadata_no_crash(monkeypatch):
+    from app.billing import stripe_gateway
+    event = {"type": "checkout.session.completed",
+             "data": {"object": {"id": "cs_bad", "metadata": {}}}}
+    monkeypatch.setattr(stripe_gateway, "construct_event", lambda p, s: event)
+    r = _client().post("/stripe/webhook", content=b"{}",
+                       headers={"Stripe-Signature": "x"})
+    assert r.status_code == 200   # acked, no crash, no credit granted

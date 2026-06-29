@@ -29,8 +29,11 @@ def checkout(request: Request, pack_key: str = Form(...),
             f"{base}/app/billing?status=cancel", packs.currency())
     except Exception:
         return redirect("/app/billing?status=error")
-    record_pending(session, sess["id"], u.buyer_account_id, pack.key, pack.credits,
-                   pack.amount_cents, packs.currency())
+    try:
+        record_pending(session, sess["id"], u.buyer_account_id, pack.key, pack.credits,
+                       pack.amount_cents, packs.currency())
+    except Exception:
+        return redirect("/app/billing?status=error")
     return redirect(sess["url"])
 
 
@@ -45,10 +48,11 @@ async def webhook(request: Request, stripe_signature: str = Header(default=""),
     if event.get("type") == "checkout.session.completed":
         obj = event["data"]["object"]
         meta = obj.get("metadata") or {}
-        fulfill_session(session, obj.get("id"),
-                        int(meta.get("buyer_account_id", 0) or 0),
-                        int(meta.get("credits", 0) or 0),
-                        meta.get("pack_key", ""),
-                        int(obj.get("amount_total") or 0),
-                        obj.get("currency", "gbp"))
+        buyer_id = int(meta.get("buyer_account_id", 0) or 0)
+        credits = int(meta.get("credits", 0) or 0)
+        if buyer_id and credits:
+            fulfill_session(session, obj.get("id"), buyer_id, credits,
+                            meta.get("pack_key", ""),
+                            int(obj.get("amount_total") or 0),
+                            obj.get("currency", "gbp"))
     return Response(status_code=200)
