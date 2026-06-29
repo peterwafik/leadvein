@@ -8,11 +8,12 @@ from app.billing import stripe_gateway, packs
 from app.billing.service import record_pending, fulfill_session
 from app.web.csrf import csrf_protect
 from app.web.deps import get_session, current_user, redirect
+from app.web.ratelimit import rate_limiter
 
 router = APIRouter()
 
 
-@router.post("/app/billing/checkout", dependencies=[Depends(csrf_protect)])
+@router.post("/app/billing/checkout", dependencies=[Depends(rate_limiter(15, 60)), Depends(csrf_protect)])
 def checkout(request: Request, pack_key: str = Form(...),
              session: Session = Depends(get_session)):
     u = current_user(request, session)

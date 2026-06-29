@@ -8,6 +8,7 @@ from app.core.db import BuyerAccount
 from app.web.csrf import ensure_csrf, csrf_protect
 from app.web.deps import (templates, get_session, current_user, login_user,
                           logout_user, redirect)
+from app.web.ratelimit import rate_limiter
 
 router = APIRouter()
 
@@ -20,7 +21,7 @@ def login_page(request: Request, session: Session = Depends(get_session)):
         "request": request, "user": None, "csrf": ensure_csrf(request)})
 
 
-@router.post("/login", dependencies=[Depends(csrf_protect)])
+@router.post("/login", dependencies=[Depends(rate_limiter(10, 60)), Depends(csrf_protect)])
 def login_submit(request: Request, email: str = Form(...), password: str = Form(...),
                  session: Session = Depends(get_session)):
     user = authenticate(session, email, password)

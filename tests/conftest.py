@@ -29,3 +29,10 @@ def _remove_test_db():
         os.remove(_DB_PATH)
     except OSError:
         pass
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    from app.web.ratelimit import reset
+    reset()
+    yield
