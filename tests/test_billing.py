@@ -71,6 +71,7 @@ def test_record_pending_creates_pending_row():
 
 
 import json
+import re
 from fastapi.testclient import TestClient
 import app.leadvault as lv
 from app.billing import stripe_gateway
@@ -80,14 +81,26 @@ def _client():
     return TestClient(lv.app)
 
 
+def _token_from(html: str) -> str:
+    m = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    return m.group(1) if m else ""
+
+
 def _login_buyer(c):
-    c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345"})
+    """Login as demo buyer and return the session csrf token."""
+    page = c.get("/login").text
+    token = _token_from(page)
+    c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345",
+                           "csrf_token": token})
+    return token
 
 
 def test_checkout_disabled_redirects_with_notice(monkeypatch):
     monkeypatch.setattr(stripe_gateway, "is_enabled", lambda: False)
-    c = _client(); _login_buyer(c)
-    r = c.post("/app/billing/checkout", data={"pack_key": "pack_100"},
+    c = _client()
+    token = _login_buyer(c)
+    r = c.post("/app/billing/checkout", data={"pack_key": "pack_100",
+                                               "csrf_token": token},
                follow_redirects=False)
     assert r.status_code in (302, 303)
     assert "status=disabled" in r.headers["location"]
@@ -98,8 +111,10 @@ def test_checkout_enabled_redirects_to_stripe_and_records_pending(monkeypatch):
     monkeypatch.setattr(stripe_gateway, "create_checkout_session",
                         lambda *a, **k: {"id": "cs_test_1",
                                          "url": "https://checkout.stripe.test/cs_test_1"})
-    c = _client(); _login_buyer(c)
-    r = c.post("/app/billing/checkout", data={"pack_key": "pack_100"},
+    c = _client()
+    token = _login_buyer(c)
+    r = c.post("/app/billing/checkout", data={"pack_key": "pack_100",
+                                               "csrf_token": token},
                follow_redirects=False)
     assert r.status_code in (302, 303)
     assert r.headers["location"] == "https://checkout.stripe.test/cs_test_1"

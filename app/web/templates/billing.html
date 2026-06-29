@@ -11,7 +11,7 @@
   <div class="bg-white p-4 rounded-xl border text-center">
     <div class="text-2xl font-bold">{{ p.credits }}</div>
     <div class="text-sm text-slate-500 mb-3">{{ p.label }}</div>
-    <form method="post" action="/app/billing/checkout"><input type="hidden" name="pack_key" value="{{ p.key }}"><button class="w-full bg-emerald-600 text-white rounded-lg py-2">Buy</button></form>
+    <form method="post" action="/app/billing/checkout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="pack_key" value="{{ p.key }}"><button class="w-full bg-emerald-600 text-white rounded-lg py-2">Buy</button></form>
   </div>
   {% endfor %}
 </div>

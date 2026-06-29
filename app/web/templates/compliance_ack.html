@@ -7,5 +7,5 @@
     <li>I will use suppression lists and will not resell leads unless permitted.</li>
     <li>I understand data is business-level, from lawful public/official/licensed sources with attribution.</li>
   </ul>
-  <form method="post" action="/app/ack" class="mt-4"><button class="bg-emerald-600 text-white rounded-lg px-4 py-2">I acknowledge</button></form>
+  <form method="post" action="/app/ack" class="mt-4"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="bg-emerald-600 text-white rounded-lg px-4 py-2">I acknowledge</button></form>
 </div>{% endblock %}

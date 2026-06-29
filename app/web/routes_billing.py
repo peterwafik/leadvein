@@ -6,12 +6,13 @@ from sqlmodel import Session
 
 from app.billing import stripe_gateway, packs
 from app.billing.service import record_pending, fulfill_session
+from app.web.csrf import csrf_protect
 from app.web.deps import get_session, current_user, redirect
 
 router = APIRouter()
 
 
-@router.post("/app/billing/checkout")
+@router.post("/app/billing/checkout", dependencies=[Depends(csrf_protect)])
 def checkout(request: Request, pack_key: str = Form(...),
              session: Session = Depends(get_session)):
     u = current_user(request, session)

@@ -3,6 +3,7 @@
   <div class="text-xl font-semibold text-emerald-600 mb-4">Create account</div>
   {% if error %}<p class="text-red-600 text-sm mb-2">{{ error }}</p>{% endif %}
   <form method="post" action="/register" class="space-y-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <input name="company" placeholder="Company name" class="w-full border rounded-lg p-2" required>
     <input name="email" type="email" placeholder="Email" class="w-full border rounded-lg p-2" required>
     <input name="password" type="password" placeholder="Password" class="w-full border rounded-lg p-2" required>

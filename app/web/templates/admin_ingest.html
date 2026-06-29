@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block body %}
 <h1 class="text-xl font-semibold mb-4">Ingestion</h1>
 <form method="post" action="/admin/ingest" class="bg-white p-4 rounded-xl border grid grid-cols-2 gap-3 text-sm">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
   <label>Source adapter<select name="adapter_key" class="mt-1 w-full border rounded-lg p-2">{% for a in adapters %}<option>{{ a }}</option>{% endfor %}</select></label>
   <label>Scoring profile<input name="scoring_profile_key" value="utility_energy" class="mt-1 w-full border rounded-lg p-2"></label>
   <label>City / area<input name="city" class="mt-1 w-full border rounded-lg p-2" placeholder="London"></label>

@@ -13,6 +13,7 @@ from app.core.taxonomy import all_categories, upsert_category
 from app.core.purchasing import grant_credits
 from app.enrich.website import enrich_website
 from app.ingestion.pipeline import ingest
+from app.web.csrf import ensure_csrf, csrf_protect
 from app.web.deps import templates, get_session, current_user, redirect
 
 router = APIRouter(prefix="/admin")
@@ -37,10 +38,10 @@ def overview(request: Request, session: Session = Depends(get_session)):
     n_expired = expired_count(session)
     return templates.TemplateResponse(request, "admin_overview.html", {
         "request": request, "user": u, "n_leads": n_leads, "n_sources": n_sources,
-        "n_expired": n_expired})
+        "n_expired": n_expired, "csrf": ensure_csrf(request)})
 
 
-@router.post("/purge-expired")
+@router.post("/purge-expired", dependencies=[Depends(csrf_protect)])
 def purge_expired_route(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
     if not u:
@@ -58,10 +59,10 @@ def ingest_page(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": adapter_registry.all_keys(),
-        "result": None})
+        "result": None, "csrf": ensure_csrf(request)})
 
 
-@router.post("/ingest")
+@router.post("/ingest", dependencies=[Depends(csrf_protect)])
 def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(""),
                categories: str = Form(""),
                scoring_profile_key: str = Form("utility_energy"),
@@ -77,7 +78,7 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
                     enrich_fn=_enrich_for_admin, actor_user_id=u.id)
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": adapter_registry.all_keys(),
-        "result": counts})
+        "result": counts, "csrf": ensure_csrf(request)})
 
 
 @router.get("/leads")
@@ -107,10 +108,11 @@ def categories(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     return templates.TemplateResponse(request, "admin_categories.html", {
-        "request": request, "user": u, "cats": all_categories(session)})
+        "request": request, "user": u, "cats": all_categories(session),
+        "csrf": ensure_csrf(request)})
 
 
-@router.post("/categories")
+@router.post("/categories", dependencies=[Depends(csrf_protect)])
 def categories_add(request: Request, key: str = Form(...), label: str = Form(...),
                    session: Session = Depends(get_session)):
     u = _admin(request, session)
@@ -127,10 +129,10 @@ def optouts(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     rows = session.exec(select(OptOutRequest)).all()
     return templates.TemplateResponse(request, "admin_optouts.html", {
-        "request": request, "user": u, "rows": rows})
+        "request": request, "user": u, "rows": rows, "csrf": ensure_csrf(request)})
 
 
-@router.post("/optouts")
+@router.post("/optouts", dependencies=[Depends(csrf_protect)])
 def optouts_add(request: Request, kind: str = Form(...), value: str = Form(...),
                 session: Session = Depends(get_session)):
     u = _admin(request, session)
@@ -142,7 +144,7 @@ def optouts_add(request: Request, kind: str = Form(...), value: str = Form(...),
     return redirect("/admin/optouts")
 
 
-@router.post("/grant")
+@router.post("/grant", dependencies=[Depends(csrf_protect)])
 def grant(request: Request, buyer_account_id: int = Form(...), amount: int = Form(...),
           session: Session = Depends(get_session)):
     u = _admin(request, session)

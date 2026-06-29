@@ -15,6 +15,7 @@ from app.core.masking import unlock_view, assert_owned
 from app.core.purchasing import (unlock_lead, balance, InsufficientCredits,
                                  LeadSuppressed, ComplianceNotAcknowledged)
 from app.core.recipes import DEFAULT_FILTERS
+from app.web.csrf import ensure_csrf, csrf_protect
 from app.web.deps import templates, get_session, current_user, redirect
 
 router = APIRouter(prefix="/app")
@@ -58,10 +59,10 @@ def marketplace_page(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     return templates.TemplateResponse(request, "marketplace.html", {
-        "request": request, "user": u, "results": None})
+        "request": request, "user": u, "results": None, "csrf": ensure_csrf(request)})
 
 
-@router.post("/marketplace/search")
+@router.post("/marketplace/search", dependencies=[Depends(csrf_protect)])
 async def marketplace_search(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
@@ -72,10 +73,10 @@ async def marketplace_search(request: Request, session: Session = Depends(get_se
     est = estimate(session, u.buyer_account_id, filters)
     return templates.TemplateResponse(request, "marketplace.html", {
         "request": request, "user": u, "results": results, "estimate": est,
-        "credits": balance(session, u.buyer_account_id)})
+        "credits": balance(session, u.buyer_account_id), "csrf": ensure_csrf(request)})
 
 
-@router.post("/unlock/{lead_id}")
+@router.post("/unlock/{lead_id}", dependencies=[Depends(csrf_protect)])
 def unlock(request: Request, lead_id: int, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
@@ -133,10 +134,11 @@ def ack_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    return templates.TemplateResponse(request, "compliance_ack.html", {"request": request, "user": u})
+    return templates.TemplateResponse(request, "compliance_ack.html", {
+        "request": request, "user": u, "csrf": ensure_csrf(request)})
 
 
-@router.post("/ack")
+@router.post("/ack", dependencies=[Depends(csrf_protect)])
 def ack_submit(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
@@ -156,10 +158,10 @@ def recipes_page(request: Request, session: Session = Depends(get_session)):
     recs = session.exec(select(LeadRecipe).where(
         LeadRecipe.buyer_account_id == u.buyer_account_id)).all()
     return templates.TemplateResponse(request, "recipes.html", {
-        "request": request, "user": u, "recipes": recs})
+        "request": request, "user": u, "recipes": recs, "csrf": ensure_csrf(request)})
 
 
-@router.post("/recipes")
+@router.post("/recipes", dependencies=[Depends(csrf_protect)])
 async def recipes_save(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
@@ -189,7 +191,8 @@ def billing(request: Request, session: Session = Depends(get_session)):
         "credits": balance(session, u.buyer_account_id), "txns": txns,
         "packs": billing_packs.CREDIT_PACKS, "payments": payments,
         "billing_enabled": stripe_gateway.is_enabled(),
-        "status": request.query_params.get("status", "")})
+        "status": request.query_params.get("status", ""),
+        "csrf": ensure_csrf(request)})
 
 
 @router.get("/suppression")
@@ -204,10 +207,10 @@ def suppression_page(request: Request, session: Session = Depends(get_session)):
         entries += session.exec(select(SuppressionEntry).where(
             SuppressionEntry.list_id == lst.id)).all()
     return templates.TemplateResponse(request, "suppression.html", {
-        "request": request, "user": u, "entries": entries})
+        "request": request, "user": u, "entries": entries, "csrf": ensure_csrf(request)})
 
 
-@router.post("/suppression")
+@router.post("/suppression", dependencies=[Depends(csrf_protect)])
 async def suppression_add(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:

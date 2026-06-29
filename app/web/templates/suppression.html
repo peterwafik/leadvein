@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block body %}
 <h1 class="text-xl font-semibold mb-4">Suppression</h1>
 <form method="post" action="/app/suppression" class="bg-white p-4 rounded-xl border flex gap-3 mb-4 text-sm">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
   <select name="kind" class="border rounded-lg p-2"><option value="domain">domain</option><option value="phone">phone</option><option value="email">email</option><option value="business_name">business name</option></select>
   <input name="value" class="border rounded-lg p-2 flex-1" placeholder="value to suppress" required>
   <button class="bg-emerald-600 text-white rounded-lg px-3 py-1">Add</button>

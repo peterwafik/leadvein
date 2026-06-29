@@ -1,3 +1,4 @@
+import re
 from fastapi.testclient import TestClient
 import app.leadvault as lv
 from app.core.leadcats import sync_lead_categories
@@ -7,13 +8,21 @@ def client():
     return TestClient(lv.app)
 
 
+def _token_from(html: str) -> str:
+    m = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    return m.group(1) if m else ""
+
+
 def test_login_page_loads():
     assert client().get("/login").status_code == 200
 
 
 def test_demo_buyer_login_sets_session():
     c = client()
-    r = c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345"},
+    page = c.get("/login").text
+    token = _token_from(page)
+    r = c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345",
+                               "csrf_token": token},
                follow_redirects=False)
     assert r.status_code in (302, 303)
     assert "session" in r.headers.get("set-cookie", "").lower()
@@ -36,20 +45,26 @@ def test_full_buyer_journey(monkeypatch):
         s.add(hidden); s.commit(); s.refresh(hidden)
         sync_lead_categories(s, hidden)
     c = client()
-    c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345"})
+    # get csrf token and log in
+    login_page = c.get("/login").text
+    token = _token_from(login_page)
+    c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345",
+                           "csrf_token": token})
     # marketplace search returns a MASKED card (no business name / contact)
     r = c.post("/app/marketplace/search",
-               data={"categories": "restaurant", "city": "London", "min_score": "50"})
+               data={"categories": "restaurant", "city": "London", "min_score": "50",
+                     "csrf_token": token})
     assert r.status_code == 200
     assert "Hidden Diner" not in r.text and "hiddendiner.co.uk" not in r.text
     assert "85" in r.text  # score visible
     # accept compliance, then unlock
-    c.post("/app/ack")
+    c.post("/app/ack", data={"csrf_token": token})
     lead_id = None
     with Session(lv.engine) as s:
         from sqlmodel import select
         lead_id = s.exec(select(Lead).where(Lead.business_name == "Hidden Diner")).first().id
-    ru = c.post(f"/app/unlock/{lead_id}", follow_redirects=False)
+    ru = c.post(f"/app/unlock/{lead_id}", data={"csrf_token": token},
+                follow_redirects=False)
     assert ru.status_code in (302, 303)
     # purchased detail now shows full contact
     detail = c.get(f"/app/purchased/{lead_id}")
@@ -89,9 +104,13 @@ def test_admin_ingestion_populates_inventory(monkeypatch):
                                       "ecommerce_detected": False,
                                       "last_scanned": "2026-06-28T00:00:00+00:00"})
     c = client()
-    c.post("/login", data={"email": "admin@leadvault.local", "password": "admin12345"})
+    login_page = c.get("/login").text
+    token = _token_from(login_page)
+    c.post("/login", data={"email": "admin@leadvault.local", "password": "admin12345",
+                           "csrf_token": token})
     r = c.post("/admin/ingest", data={"adapter_key": "fake_admin", "city": "London",
-               "categories": "restaurant", "scoring_profile_key": "utility_energy"},
+               "categories": "restaurant", "scoring_profile_key": "utility_energy",
+               "csrf_token": token},
                follow_redirects=True)
     assert r.status_code == 200
     assert "Admin Diner" in r.text or "1" in r.text  # leads list or count shows the new lead
