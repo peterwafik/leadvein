@@ -136,6 +136,21 @@ class CreditTransaction(SQLModel, table=True):
     created_at: str = Field(default_factory=_now)
 
 
+class StripePayment(SQLModel, table=True):
+    __tablename__ = "lv_stripe_payment"
+    __table_args__ = (UniqueConstraint("session_id", name="uq_lv_stripe_session"),)
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: str = Field(default="", index=True)
+    buyer_account_id: int = Field(default=0, index=True)
+    pack_key: str = ""
+    credits: int = 0
+    amount_cents: int = 0
+    currency: str = "gbp"
+    status: str = "pending"  # pending | completed
+    created_at: str = Field(default_factory=_now)
+    completed_at: str | None = None
+
+
 class SuppressionList(SQLModel, table=True):
     __tablename__ = "lv_suppression_list"
     id: int | None = Field(default=None, primary_key=True)
