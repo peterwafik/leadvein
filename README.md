@@ -89,3 +89,12 @@ filtered at search, purchase, and export; all unlocks/exports are in the admin A
 Architecture: source-agnostic `app/core/` marketplace core + pluggable `app/adapters/`
 (OSM/Overpass, urlscan-fingerprint) + `app/scoring/profiles/` (utility_energy is one profile).
 Adding a data source = adding an adapter; adding a vertical = adding a scoring profile.
+
+### Billing (Stripe credit packs)
+
+Buyers can buy credit packs via Stripe Checkout. It is OFF until configured:
+- Set `STRIPE_SECRET_KEY` (test mode) to enable the Buy buttons.
+- Set `STRIPE_WEBHOOK_SECRET` and point a Stripe webhook at `POST /stripe/webhook` for the
+  `checkout.session.completed` event. **Credits are granted only by the verified webhook** (idempotent),
+  never by the success redirect. With no key set, the Billing page shows a notice and credits remain
+  admin-granted. `BILLING_CURRENCY` defaults to `gbp`.
