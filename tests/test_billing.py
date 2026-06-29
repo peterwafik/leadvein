@@ -37,3 +37,34 @@ def test_gateway_is_enabled_reflects_env(monkeypatch):
     assert stripe_gateway.is_enabled() is False
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
     assert stripe_gateway.is_enabled() is True
+
+
+def test_fulfill_grants_once_and_is_idempotent():
+    from sqlmodel import Session, select
+    from app.core.db import init_db, BuyerAccount, CreditTransaction
+    from app.core.purchasing import balance
+    from app.billing.service import fulfill_session
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        ba = BuyerAccount(company_name="A", credits=0); s.add(ba); s.commit(); s.refresh(ba)
+        p1 = fulfill_session(s, "cs_1", ba.id, 100, "pack_100", 2900, "gbp")
+        assert p1.status == "completed"
+        assert balance(s, ba.id) == 100
+        # replay (webhook retry) — must NOT double-credit
+        p2 = fulfill_session(s, "cs_1", ba.id, 100)
+        assert p2.id == p1.id
+        assert balance(s, ba.id) == 100
+        # exactly one credit ledger row for this session
+        txns = s.exec(select(CreditTransaction).where(
+            CreditTransaction.ref == "cs_1")).all()
+        assert len(txns) == 1
+
+
+def test_record_pending_creates_pending_row():
+    from sqlmodel import Session
+    from app.core.db import init_db, StripePayment
+    from app.billing.service import record_pending
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        p = record_pending(s, "cs_2", 7, "pack_500", 500, 11900, "gbp")
+        assert p.status == "pending" and p.buyer_account_id == 7
