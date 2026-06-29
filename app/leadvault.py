@@ -20,7 +20,7 @@ app = FastAPI(title="LeadVault")
 app.add_middleware(SessionMiddleware,
                    secret_key=os.getenv("LEADVAULT_SECRET", "dev-leadvault-secret"))
 
-engine = init_db("sqlite:///leadvault.db")
+engine = init_db(os.getenv("LEADVAULT_DB", "sqlite:///leadvault.db"))
 deps.set_engine(engine)
 
 
