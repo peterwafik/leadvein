@@ -178,11 +178,18 @@ def billing(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
+    from app.billing import packs as billing_packs, stripe_gateway
+    from app.core.db import StripePayment
     txns = session.exec(select(CreditTransaction).where(
         CreditTransaction.buyer_account_id == u.buyer_account_id)).all()
+    payments = session.exec(select(StripePayment).where(
+        StripePayment.buyer_account_id == u.buyer_account_id)).all()
     return templates.TemplateResponse(request, "billing.html", {
-        "request": request, "user": u, "credits": balance(session, u.buyer_account_id),
-        "txns": txns})
+        "request": request, "user": u,
+        "credits": balance(session, u.buyer_account_id), "txns": txns,
+        "packs": billing_packs.CREDIT_PACKS, "payments": payments,
+        "billing_enabled": stripe_gateway.is_enabled(),
+        "status": request.query_params.get("status", "")})
 
 
 @router.get("/suppression")

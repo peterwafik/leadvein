@@ -1,5 +1,29 @@
 {% extends "base.html" %}{% block body %}
 <h1 class="text-xl font-semibold mb-4">Billing</h1>
-<div class="bg-white p-4 rounded-xl border mb-4"><div class="text-3xl font-bold text-emerald-600">{{ credits }}</div><div class="text-sm text-slate-500">Credits (admin-granted in this release)</div></div>
+{% if status == "success" %}<p class="text-sm text-emerald-700 mb-3">Payment received — your credits will appear shortly.</p>{% endif %}
+{% if status in ("cancel","disabled","badpack","error") %}<p class="text-sm text-amber-700 mb-3">Checkout was not completed ({{ status }}).</p>{% endif %}
+<div class="bg-white p-4 rounded-xl border mb-4"><div class="text-3xl font-bold text-emerald-600">{{ credits }}</div><div class="text-sm text-slate-500">Credits</div></div>
+
+<h2 class="font-medium mb-2">Buy credits</h2>
+{% if billing_enabled %}
+<div class="grid grid-cols-3 gap-4 mb-6">
+  {% for p in packs %}
+  <div class="bg-white p-4 rounded-xl border text-center">
+    <div class="text-2xl font-bold">{{ p.credits }}</div>
+    <div class="text-sm text-slate-500 mb-3">{{ p.label }}</div>
+    <form method="post" action="/app/billing/checkout"><input type="hidden" name="pack_key" value="{{ p.key }}"><button class="w-full bg-emerald-600 text-white rounded-lg py-2">Buy</button></form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-slate-500 mb-6">Card payments are not configured in this deployment — credits are admin-granted. (Set <code>STRIPE_SECRET_KEY</code> to enable.)</p>
+{% endif %}
+
+<h2 class="font-medium mb-2">Purchases</h2>
+<div class="bg-white rounded-xl border overflow-auto mb-6"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">When</th><th class="text-left p-2">Pack</th><th class="text-left p-2">Credits</th><th class="text-left p-2">Status</th></tr></thead>
+<tbody>{% for p in payments %}<tr class="border-t"><td class="p-2">{{ p.created_at }}</td><td class="p-2">{{ p.pack_key }}</td><td class="p-2">{{ p.credits }}</td><td class="p-2">{{ p.status }}</td></tr>{% endfor %}</tbody></table></div>
+
+<h2 class="font-medium mb-2">Credit ledger</h2>
 <div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">When</th><th class="text-left p-2">Delta</th><th class="text-left p-2">Reason</th><th class="text-left p-2">Ref</th></tr></thead>
-<tbody>{% for t in txns %}<tr class="border-t"><td class="p-2">{{ t.created_at }}</td><td class="p-2">{{ t.delta }}</td><td class="p-2">{{ t.reason }}</td><td class="p-2">{{ t.ref }}</td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+<tbody>{% for t in txns %}<tr class="border-t"><td class="p-2">{{ t.created_at }}</td><td class="p-2">{{ t.delta }}</td><td class="p-2">{{ t.reason }}</td><td class="p-2">{{ t.ref }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

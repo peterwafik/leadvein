@@ -14,6 +14,7 @@ from app.web import deps
 from app.web.routes_admin import router as admin_router
 from app.web.routes_auth import router as auth_router
 from app.web.routes_buyer import router as buyer_router
+from app.web.routes_billing import router as billing_router
 
 app = FastAPI(title="LeadVault")
 app.add_middleware(SessionMiddleware,
@@ -41,6 +42,7 @@ _seed_accounts()
 app.include_router(auth_router)
 app.include_router(buyer_router)
 app.include_router(admin_router)
+app.include_router(billing_router)
 
 
 @app.get("/")
