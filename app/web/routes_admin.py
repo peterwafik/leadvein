@@ -35,7 +35,7 @@ def overview(request: Request, session: Session = Depends(get_session)):
     n_leads = len(session.exec(select(Lead)).all())
     n_sources = len(session.exec(select(LeadSource)).all())
     n_expired = expired_count(session)
-    return templates.TemplateResponse("admin_overview.html", {
+    return templates.TemplateResponse(request, "admin_overview.html", {
         "request": request, "user": u, "n_leads": n_leads, "n_sources": n_sources,
         "n_expired": n_expired})
 
@@ -56,7 +56,7 @@ def ingest_page(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
     if not u:
         return redirect("/login")
-    return templates.TemplateResponse("admin_ingest.html", {
+    return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": adapter_registry.all_keys(),
         "result": None})
 
@@ -75,7 +75,7 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
                     AdapterQuery(area={"city": city}, categories=cats, limit=100),
                     scoring_profile_key=scoring_profile_key,
                     enrich_fn=_enrich_for_admin, actor_user_id=u.id)
-    return templates.TemplateResponse("admin_ingest.html", {
+    return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": adapter_registry.all_keys(),
         "result": counts})
 
@@ -87,7 +87,7 @@ def leads(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     leads = session.exec(select(Lead).order_by(Lead.id.desc())).all()[:200]
     rows = [{"lead": l, "opted_out": lead_opted_out(session, l)} for l in leads]
-    return templates.TemplateResponse("admin_leads.html", {
+    return templates.TemplateResponse(request, "admin_leads.html", {
         "request": request, "user": u, "rows": rows})
 
 
@@ -97,7 +97,7 @@ def sources(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     rows = session.exec(select(LeadSource)).all()
-    return templates.TemplateResponse("admin_sources.html", {
+    return templates.TemplateResponse(request, "admin_sources.html", {
         "request": request, "user": u, "rows": rows})
 
 
@@ -106,7 +106,7 @@ def categories(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
     if not u:
         return redirect("/login")
-    return templates.TemplateResponse("admin_categories.html", {
+    return templates.TemplateResponse(request, "admin_categories.html", {
         "request": request, "user": u, "cats": all_categories(session)})
 
 
@@ -126,7 +126,7 @@ def optouts(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     rows = session.exec(select(OptOutRequest)).all()
-    return templates.TemplateResponse("admin_optouts.html", {
+    return templates.TemplateResponse(request, "admin_optouts.html", {
         "request": request, "user": u, "rows": rows})
 
 
@@ -160,5 +160,5 @@ def audit_page(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     rows = session.exec(select(AuditLog).order_by(AuditLog.id.desc())).all()[:200]
-    return templates.TemplateResponse("admin_audit.html", {
+    return templates.TemplateResponse(request, "admin_audit.html", {
         "request": request, "user": u, "rows": rows})

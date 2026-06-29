@@ -15,7 +15,7 @@ router = APIRouter()
 def login_page(request: Request, session: Session = Depends(get_session)):
     if current_user(request, session):
         return redirect("/app")
-    return templates.TemplateResponse("login.html", {"request": request, "user": None})
+    return templates.TemplateResponse(request, "login.html", {"request": request, "user": None})
 
 
 @router.post("/login")
@@ -23,7 +23,7 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
                  session: Session = Depends(get_session)):
     user = authenticate(session, email, password)
     if not user:
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "login.html", {"request": request, "user": None,
                            "error": "Invalid credentials"}, status_code=401)
     login_user(request, user)
@@ -32,7 +32,7 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
 
 @router.get("/register")
 def register_page(request: Request):
-    return templates.TemplateResponse("register.html", {"request": request, "user": None})
+    return templates.TemplateResponse(request, "register.html", {"request": request, "user": None})
 
 
 @router.post("/register")
@@ -41,7 +41,7 @@ def register_submit(request: Request, company: str = Form(...), email: str = For
     from sqlmodel import select
     from app.core.db import User
     if session.exec(select(User).where(User.email == email.strip().lower())).first():
-        return templates.TemplateResponse(
+        return templates.TemplateResponse(request,
             "register.html", {"request": request, "user": None,
                               "error": "Email already registered"}, status_code=400)
     ba = BuyerAccount(company_name=company, credits=0)

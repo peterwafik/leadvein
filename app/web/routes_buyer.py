@@ -46,7 +46,7 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
         PurchasedLead.buyer_account_id == ba.id)).all())
     n_recipes = len(session.exec(select(LeadRecipe).where(
         LeadRecipe.buyer_account_id == ba.id)).all())
-    return templates.TemplateResponse("dashboard.html", {
+    return templates.TemplateResponse(request, "dashboard.html", {
         "request": request, "user": u, "credits": ba.credits,
         "n_purchased": n_purchased, "n_recipes": n_recipes,
         "acked": bool(ba.compliance_ack_at)})
@@ -57,7 +57,7 @@ def marketplace_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    return templates.TemplateResponse("marketplace.html", {
+    return templates.TemplateResponse(request, "marketplace.html", {
         "request": request, "user": u, "results": None})
 
 
@@ -70,7 +70,7 @@ async def marketplace_search(request: Request, session: Session = Depends(get_se
     filters = _filters_from_form(form)
     results = search(session, u.buyer_account_id, filters)
     est = estimate(session, u.buyer_account_id, filters)
-    return templates.TemplateResponse("marketplace.html", {
+    return templates.TemplateResponse(request, "marketplace.html", {
         "request": request, "user": u, "results": results, "estimate": est,
         "credits": balance(session, u.buyer_account_id)})
 
@@ -98,7 +98,7 @@ def purchased(request: Request, session: Session = Depends(get_session)):
         PurchasedLead.buyer_account_id == u.buyer_account_id)).all()
     rows = [unlock_view(session.get(Lead, p.lead_id)) | {"status": p.status,
             "purchased_at": p.purchased_at} for p in purchases if session.get(Lead, p.lead_id)]
-    return templates.TemplateResponse("purchased.html", {
+    return templates.TemplateResponse(request, "purchased.html", {
         "request": request, "user": u, "rows": rows})
 
 
@@ -114,7 +114,7 @@ def purchased_detail(request: Request, lead_id: int,
         return redirect("/app/purchased")
     audit(session, u.id, "view_detail", "Lead", str(lead_id), {})
     lead = unlock_view(session.get(Lead, lead_id))
-    return templates.TemplateResponse("lead_detail.html", {
+    return templates.TemplateResponse(request, "lead_detail.html", {
         "request": request, "user": u, "lead": lead})
 
 
@@ -133,7 +133,7 @@ def ack_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    return templates.TemplateResponse("compliance_ack.html", {"request": request, "user": u})
+    return templates.TemplateResponse(request, "compliance_ack.html", {"request": request, "user": u})
 
 
 @router.post("/ack")
@@ -155,7 +155,7 @@ def recipes_page(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     recs = session.exec(select(LeadRecipe).where(
         LeadRecipe.buyer_account_id == u.buyer_account_id)).all()
-    return templates.TemplateResponse("recipes.html", {
+    return templates.TemplateResponse(request, "recipes.html", {
         "request": request, "user": u, "recipes": recs})
 
 
@@ -180,7 +180,7 @@ def billing(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     txns = session.exec(select(CreditTransaction).where(
         CreditTransaction.buyer_account_id == u.buyer_account_id)).all()
-    return templates.TemplateResponse("billing.html", {
+    return templates.TemplateResponse(request, "billing.html", {
         "request": request, "user": u, "credits": balance(session, u.buyer_account_id),
         "txns": txns})
 
@@ -196,7 +196,7 @@ def suppression_page(request: Request, session: Session = Depends(get_session)):
     for lst in lists:
         entries += session.exec(select(SuppressionEntry).where(
             SuppressionEntry.list_id == lst.id)).all()
-    return templates.TemplateResponse("suppression.html", {
+    return templates.TemplateResponse(request, "suppression.html", {
         "request": request, "user": u, "entries": entries})
 
 
