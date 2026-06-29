@@ -29,3 +29,11 @@ def test_stripe_payment_session_id_is_unique():
         except IntegrityError:
             raised = True
         assert raised
+
+
+def test_gateway_is_enabled_reflects_env(monkeypatch):
+    from app.billing import stripe_gateway
+    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+    assert stripe_gateway.is_enabled() is False
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    assert stripe_gateway.is_enabled() is True
