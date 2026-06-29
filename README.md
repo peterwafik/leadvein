@@ -116,3 +116,13 @@ Buyers can buy credit packs via Stripe Checkout. It is OFF until configured:
   - Backup: `sqlite3 leadvault.db ".backup '/backups/leadvault-$(date +%F).db'"`
   - Restore: stop the app, then `cp /backups/leadvault-YYYY-MM-DD.db leadvault.db` and restart.
   Schedule the backup via cron. (Postgres is the production target; the models are Postgres-ready.)
+
+### Stripe webhook go-live (test mode)
+
+The webhook signature-verification + idempotency path is proven against real HMAC signatures by
+`scripts/verify_stripe_webhook.py` (run it against a running server with `STRIPE_WEBHOOK_SECRET` set).
+To wire Stripe's own delivery to a deployed instance:
+1. Deploy behind HTTPS with `LEADVAULT_ENV=prod`, `LEADVAULT_SECRET`, `STRIPE_SECRET_KEY` (test mode), and `STRIPE_WEBHOOK_SECRET`.
+2. In the Stripe Dashboard (test mode) → Developers → Webhooks, add an endpoint `https://<your-host>/stripe/webhook` subscribed to `checkout.session.completed`; copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Buy a pack with a Stripe test card (4242 4242 4242 4242) → confirm the credit lands once (the buyer's ledger shows one `stripe_purchase` row). Stripe's "resend" on the event must NOT double-credit.
+   - No public URL handy? Use the Stripe CLI: `stripe listen --forward-to localhost:8000/stripe/webhook` then `stripe trigger checkout.session.completed`.
