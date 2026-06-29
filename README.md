@@ -107,3 +107,12 @@ Buyers can buy credit packs via Stripe Checkout. It is OFF until configured:
   `checkout.session.completed` event. **Credits are granted only by the verified webhook** (idempotent),
   never by the success redirect. With no key set, the Billing page shows a notice and credits remain
   admin-granted. `BILLING_CURRENCY` defaults to `gbp`.
+
+### Operations (pilot)
+
+- **Audit log:** every credit grant, unlock, opt-out, ingestion, and purge is recorded and reviewable by an admin at `/admin/audit`.
+- **Error log:** unhandled errors return a clean 500 (no traceback leaked to the client) and are logged with full traceback to stderr — and to a file if `LEADVAULT_LOG` is set (e.g. `LEADVAULT_LOG=/var/log/leadvault.log`).
+- **Backup / restore (SQLite):** the database is a single file (`leadvault.db`, or `$LEADVAULT_DB`). Back it up online with the SQLite backup API (safe while running):
+  - Backup: `sqlite3 leadvault.db ".backup '/backups/leadvault-$(date +%F).db'"`
+  - Restore: stop the app, then `cp /backups/leadvault-YYYY-MM-DD.db leadvault.db` and restart.
+  Schedule the backup via cron. (Postgres is the production target; the models are Postgres-ready.)

@@ -18,8 +18,28 @@ from app.web.routes_buyer import router as buyer_router
 from app.web.routes_billing import router as billing_router
 from app.web.routes_public import router as public_router
 
+# Operational logging: always to stderr; also to LEADVAULT_LOG file if set. Unhandled
+# errors are logged with traceback (see the exception handler below) so a pilot operator
+# has a persistent record to review.
+import logging
+
+_log_handlers: list[logging.Handler] = [logging.StreamHandler()]
+_log_file = os.getenv("LEADVAULT_LOG")
+if _log_file:
+    _log_handlers.append(logging.FileHandler(_log_file))
+logging.basicConfig(level=logging.INFO, handlers=_log_handlers,
+                    format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger("leadvault")
+
 app = FastAPI(title="LeadVault", debug=False)
 app.add_middleware(SessionMiddleware, **config.session_kwargs())
+
+
+@app.exception_handler(Exception)
+async def _log_unhandled(request: Request, exc: Exception):
+    from fastapi.responses import PlainTextResponse
+    logger.exception("unhandled error on %s %s", request.method, request.url.path)
+    return PlainTextResponse("Internal Server Error", status_code=500)
 
 engine = init_db(os.getenv("LEADVAULT_DB", "sqlite:///leadvault.db"))
 deps.set_engine(engine)
