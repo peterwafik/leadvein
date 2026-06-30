@@ -1,7 +1,11 @@
 # LeadVault — Composable Targeting / Segmentation Layer (Design Spec)
 
+> ⚠️ **SUPERSEDED by `2026-06-30-targeting-segmentation-design-v2.md`.** v2 folds in the review
+> findings (tri-state null handling, read-time vs write-time split, two-stage evaluator, canonical
+> negation, and the minors). Kept for history; do not build from this version.
+
 **Date:** 2026-06-30
-**Status:** SPEC ONLY — for review. **Do NOT build yet.** Sequenced strictly AFTER the pilot-readiness
+**Status:** SUPERSEDED (was: SPEC ONLY — for review). **Do NOT build yet.** Sequenced strictly AFTER the pilot-readiness
 checklist is green; not to be interleaved with pilot hardening.
 **Scope:** a composable Targeting/Segmentation layer for the Recipe Builder — buyers compose filters &
 signals (AND/OR groups), name and save them as reusable Segments, and get a live estimate, instead of
