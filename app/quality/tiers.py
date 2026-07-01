@@ -14,4 +14,7 @@ def achieved_tier(fb: dict) -> str:
 
 
 def meets(achieved: str, required: str) -> bool:
-    return TIER_ORDER.index(achieved) >= TIER_ORDER.index(required)
+    if required not in TIER_ORDER:
+        return False                     # unknown requirement -> never met (fail closed)
+    a = TIER_ORDER.index(achieved) if achieved in TIER_ORDER else 0   # unknown achieved -> absent
+    return a >= TIER_ORDER.index(required)

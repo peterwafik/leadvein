@@ -31,9 +31,18 @@ def test_build_validation_stamps_honest_tiers_and_no_gated_fields():
 
 def test_ingested_lead_carries_validation(monkeypatch):
     # the pipeline stamps validation_json + quality_score; assert an ingested lead has honest tiers
-    import app.quality.validators.email as EM
-    monkeypatch.setattr(EM, "_default_mx", lambda d: True)   # offline MX for the test
+    # patch the binding that stamp.py actually uses (imported by value, so patch stamp._default_mx)
+    monkeypatch.setattr("app.quality.stamp._default_mx", lambda d: True)
     from tests.helpers_ingest import run_fake_ingest   # provided by this task's step 3 note
     lead = run_fake_ingest()
     v = json.loads(lead.validation_json)
     assert "email" in v and "phone" in v and lead.completeness_score >= 0
+    # prove the mocked MX was actually consulted: syntactically-valid non-disposable email -> mx True
+    assert v["email"]["mx"] is True
+
+
+def test_meets_fails_closed_on_unknown_tiers():
+    from app.quality.tiers import meets
+    assert meets("weird", "present") is False     # unknown achieved -> treated as absent
+    assert meets("validated", "weird") is False   # unknown required -> never met (fail closed)
+    assert meets("validated", "present") is True  # normal case still works
