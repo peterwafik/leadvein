@@ -8,10 +8,10 @@ from app.core.db import Segment, _now
 
 
 def create_segment(session: Session, buyer_account_id: int, name: str,
-                   composition: dict, *, source_campaign_key: str = "") -> Segment:
+                   composition: dict, *, origin_key: str = "") -> Segment:
     seg = Segment(buyer_account_id=buyer_account_id, name=name,
                   composition_json=json.dumps(composition),
-                  source_campaign_key=source_campaign_key)
+                  origin_key=origin_key)
     session.add(seg); session.commit(); session.refresh(seg)
     return seg
 

@@ -203,7 +203,7 @@ class Segment(SQLModel, table=True):
     buyer_account_id: int = Field(default=0, index=True)
     name: str = ""
     composition_json: str = "{}"
-    source_campaign_key: str = ""   # optional provenance (Campaign layer)
+    origin_key: str = ""  # optional provenance (e.g. a preset key, set by the layer above)
     created_at: str = Field(default_factory=_now)
     updated_at: str | None = None
 

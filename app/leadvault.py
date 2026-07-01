@@ -71,6 +71,9 @@ app.include_router(admin_router)
 app.include_router(billing_router)
 app.include_router(public_router)
 
+from app.targeting.runtime import register_targeting_runtime
+register_targeting_runtime()
+
 
 @app.get("/")
 def root():
