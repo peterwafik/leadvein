@@ -3,6 +3,11 @@
 **Date:** 2026-07-01
 **Status:** 🔒 **LOCKED (approved 2026-07-01).** Design is final; no further changes without an explicit
 re-open. SPEC ONLY — no code until the build gate below is met. **Do NOT build yet.**
+**Reconciliation note (2026-07-01, not a re-open):** in code the Segment provenance field is named
+**`origin_key`**, not `source_campaign_key` — renamed during the Targeting engine build so the string
+"campaign" stays out of `app/core` (grep-clean-core, INV-9). Every `source_campaign_key` reference below
+maps to `origin_key`; the Campaign layer sets it to the campaign key. Purely a name change; behaviour
+and intent are unchanged.
 **Extends:** `2026-06-30-targeting-segmentation-design-v2.md` (Targeting v2). This is a higher-level
 layer *on top of* v2 — it reuses v2's predicate composition + Segment + scoring machinery verbatim and
 adds no parallel engine.
