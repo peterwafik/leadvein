@@ -21,7 +21,7 @@ def lead_view(lead) -> dict:
         "postal_code": lead.postal_code, "latitude": lead.latitude, "longitude": lead.longitude,
         "phone": lead.phone, "public_email": lead.public_email, "website_url": lead.website_url,
         "opening_hours": getattr(lead, "opening_hours", ""),
-        "validation": _load(lead.validation_json), "quality_score": lead.quality_score,
+        "validation": _load(lead.validation_json), "completeness_score": lead.completeness_score,
         "score_total": lead.score_total, "subscores": _load(lead.subscores_json),
         "attributes": _load(lead.attributes_json), "intent": _load(lead.intent_json),
         "source_key": lead.source_key, "source_license": lead.source_license,

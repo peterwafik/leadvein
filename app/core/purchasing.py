@@ -62,7 +62,7 @@ def unlock_lead(session: Session, user, lead_id: int) -> PurchasedLead:
                              business_name=lead.business_name)):
         raise LeadSuppressed("lead is suppressed or opted out")
     if not passes_serve_filters(session, ba.id, lead):
-        raise LeadHeldBack("lead does not meet the quality gate")
+        raise LeadHeldBack("lead held back by the serve gate")
     price = lead.price_credits
     if ba.credits < price:
         raise InsufficientCredits(f"need {price}, have {ba.credits}")

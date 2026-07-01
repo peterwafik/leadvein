@@ -82,7 +82,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             date_last_verified=_now(),
             retention_expiry=expiry_for(_now()),
             dedupe_key=key,
-            validation_json=json.dumps(_val), quality_score=quality_score(_val))
+            validation_json=json.dumps(_val), completeness_score=quality_score(_val))
         session.add(lead_obj)
         session.flush()  # assign lead_obj.id
         from app.core.leadcats import sync_lead_categories

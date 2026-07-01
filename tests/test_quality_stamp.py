@@ -36,4 +36,4 @@ def test_ingested_lead_carries_validation(monkeypatch):
     from tests.helpers_ingest import run_fake_ingest   # provided by this task's step 3 note
     lead = run_fake_ingest()
     v = json.loads(lead.validation_json)
-    assert "email" in v and "phone" in v and lead.quality_score >= 0
+    assert "email" in v and "phone" in v and lead.completeness_score >= 0

@@ -112,5 +112,5 @@ def test_gate_is_load_bearing_not_noop():
             "Gate ON: a blob-less lead must NOT surface in search "
             "(if this fails, passes_serve_filters is not wired into search)"
         )
-        with pytest.raises(LeadHeldBack, match="quality gate"):
+        with pytest.raises(LeadHeldBack, match="held back"):
             unlock_lead(s, u, lead_on.id)

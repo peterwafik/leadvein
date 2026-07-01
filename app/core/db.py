@@ -81,7 +81,7 @@ class Lead(SQLModel, table=True):
     intent_json: str = "{}"
     # validation stamp
     validation_json: str = "{}"
-    quality_score: int = Field(default=0, index=True)
+    completeness_score: int = Field(default=0, index=True)
     # scoring
     score_total: int = Field(default=0, index=True)
     subscores_json: str = "{}"
