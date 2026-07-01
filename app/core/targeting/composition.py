@@ -26,7 +26,12 @@ def kleene_or(vals):
 def evaluate(view: dict, node: dict):
     if "op" in node:
         vals = [evaluate(view, child) for child in node.get("nodes", [])]
-        return kleene_and(vals) if node["op"] == "AND" else kleene_or(vals)
+        op = node["op"]
+        if op == "AND":
+            return kleene_and(vals)
+        if op == "OR":
+            return kleene_or(vals)
+        raise ValueError(f"unknown composition op: {op!r}")
     pred = registry.get(node["predicate"])
     v = pred.matches(view, node.get("params", {}))
     if node.get("negate"):
