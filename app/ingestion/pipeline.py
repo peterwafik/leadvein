@@ -13,6 +13,7 @@ from app.core.sources import ensure_source
 from app.enrich.website import enrich_website
 from app.scoring.engine import score
 from app.scoring.profiles import registry as profile_registry
+from app.quality.stamp import build_validation, quality_score
 
 
 def _lead_context(n: NormalizedLead, enrichment: dict) -> dict:
@@ -51,6 +52,16 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
         ctx = _lead_context(n, enrichment)
         scored = score(ctx, profile)
         addr = n.address or {}
+        _val = build_validation({
+            "email": n.public_email, "phone": n.phone,
+            "address": {"line1": addr.get("line1", ""),
+                        "city": addr.get("city", ""),
+                        "postal_code": addr.get("postal_code", ""),
+                        "country": addr.get("country", ""),
+                        "lat": addr.get("lat"), "lon": addr.get("lon")},
+            "intent": enrichment, "name": n.business_name, "category_keys": n.category_keys,
+            "city": addr.get("city", ""), "opening_hours": n.opening_hours,
+            "website_url": n.website_url, "date_last_verified": _now()})
         lead_obj = Lead(
             business_name=n.business_name,
             category_keys_json=json.dumps(n.category_keys),
@@ -70,7 +81,8 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             attribution=adapter.attribution(),
             date_last_verified=_now(),
             retention_expiry=expiry_for(_now()),
-            dedupe_key=key)
+            dedupe_key=key,
+            validation_json=json.dumps(_val), quality_score=quality_score(_val))
         session.add(lead_obj)
         session.flush()  # assign lead_obj.id
         from app.core.leadcats import sync_lead_categories

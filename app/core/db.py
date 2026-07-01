@@ -79,6 +79,9 @@ class Lead(SQLModel, table=True):
     # flexible attribute + intent blobs
     attributes_json: str = "{}"
     intent_json: str = "{}"
+    # validation stamp
+    validation_json: str = "{}"
+    quality_score: int = Field(default=0, index=True)
     # scoring
     score_total: int = Field(default=0, index=True)
     subscores_json: str = "{}"
