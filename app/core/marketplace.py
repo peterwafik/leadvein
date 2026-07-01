@@ -6,6 +6,7 @@ from app.core.compliance import is_suppressed, host_of, lead_opted_out
 from app.core.retention import is_expired
 from app.core.masking import mask_preview, is_owned
 from app.core.recipes import matching_leads
+from app.core.serve_filters import passes_serve_filters
 
 
 def _not_suppressed(session: Session, buyer_account_id: int, lead) -> bool:
@@ -24,6 +25,8 @@ def search(session: Session, buyer_account_id: int, filters: dict) -> list[dict]
         if not _not_suppressed(session, buyer_account_id, l):
             continue
         if lead_opted_out(session, l):
+            continue
+        if not passes_serve_filters(session, buyer_account_id, l):
             continue
         preview = mask_preview(l)
         preview["already_owned"] = is_owned(session, buyer_account_id, l.id)

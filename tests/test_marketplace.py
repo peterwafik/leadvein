@@ -4,12 +4,15 @@ from app.core.db import (init_db, Lead, _now, SuppressionList, SuppressionEntry)
 from app.core.marketplace import search, estimate
 from app.core.recipes import DEFAULT_FILTERS
 from app.core.leadcats import sync_lead_categories
+from tests.quality_helpers import hot_validation_json
 
 
 def _seed(s):
+    # Diner is a real surfaced lead: seed an honest hot validation blob so it clears the gate.
     diner = Lead(business_name="Diner", category_keys_json=json.dumps(["restaurant"]),
                  city="London", phone="1", website_url="https://keep.com", score_total=85,
-                 date_last_verified=_now(), price_credits=3)
+                 date_last_verified=_now(), price_credits=3,
+                 validation_json=hot_validation_json())
     s.add(diner); s.commit(); s.refresh(diner)
     sync_lead_categories(s, diner)
     suppressed = Lead(business_name="Suppressed", category_keys_json=json.dumps(["restaurant"]),
@@ -29,6 +32,8 @@ def test_search_excludes_opted_out_leads():
     from app.core.db import init_db, Lead, _now, OptOutRequest
     from app.core.marketplace import search
     from app.core.recipes import DEFAULT_FILTERS
+    from app.core.serve_filters import clear as _gate_off
+    _gate_off()  # gate-off: this test exercises opt-out enforcement, not the quality gate
     engine = init_db("sqlite://")
     with Session(engine) as s:
         s.add(Lead(business_name="OptedOutBiz", category_keys_json=json.dumps(["restaurant"]),
@@ -37,7 +42,7 @@ def test_search_excludes_opted_out_leads():
         s.add(OptOutRequest(kind="domain", value="gone.com", applied=True))
         s.commit()
         f = {**DEFAULT_FILTERS, "categories": ["restaurant"], "city": "London"}
-        assert search(s, 1, f) == []   # excluded from search despite the stale column
+        assert search(s, 1, f) == []   # excluded from search due to opt-out
 
 
 def test_search_excludes_suppressed_and_masks():

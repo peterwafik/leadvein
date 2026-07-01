@@ -17,6 +17,8 @@ def test_lead_model_has_no_independent_optout_flag():
 
 
 def test_opt_out_single_source_normalized_across_search_unlock_export():
+    from app.core.serve_filters import clear as _gate_off
+    _gate_off()  # gate-off: this test exercises opt-out enforcement across search/unlock/export, not the quality gate
     engine = init_db("sqlite://")
     with Session(engine) as s:
         ba = BuyerAccount(company_name="A", credits=0, compliance_ack_at=_now())

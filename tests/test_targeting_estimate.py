@@ -8,6 +8,8 @@ from app.core.targeting.estimate import estimate
 
 
 def test_estimate_masks_and_respects_compliance():
+    from app.core.serve_filters import clear as _gate_off
+    _gate_off()  # gate-off: this test exercises opt-out compliance and masking in estimate, not the quality gate
     e = init_db("sqlite://")
     registry.clear(); register_targeting_runtime()
     with Session(e) as s:

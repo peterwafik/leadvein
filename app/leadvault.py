@@ -74,6 +74,9 @@ app.include_router(public_router)
 from app.targeting.runtime import register_targeting_runtime
 register_targeting_runtime()
 
+from app.quality.runtime import register_quality_runtime
+register_quality_runtime()
+
 
 @app.get("/")
 def root():

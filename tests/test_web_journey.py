@@ -2,6 +2,7 @@ import re
 from fastapi.testclient import TestClient
 import app.leadvault as lv
 from app.core.leadcats import sync_lead_categories
+from tests.quality_helpers import hot_validation_json
 
 
 def client():
@@ -32,7 +33,8 @@ def test_full_buyer_journey(monkeypatch):
     from sqlmodel import Session
     import json
     from app.core.db import Lead, _now
-    # seed one matching lead directly into the app DB
+    # seed one matching lead directly into the app DB; hot-blob required: this is the
+    # end-to-end real-app path — the lead MUST clear the gate (gate is ON in production).
     with Session(lv.engine) as s:
         hidden = Lead(business_name="Hidden Diner",
                       category_keys_json=json.dumps(["restaurant"]), city="London",
@@ -41,7 +43,8 @@ def test_full_buyer_journey(monkeypatch):
                       subscores_json=json.dumps({"fit": 85}),
                       score_explanation="independent restaurant, open 7 days",
                       source_name="OpenStreetMap (Overpass)", source_url="http://osm",
-                      source_license="ODbL", date_last_verified=_now(), price_credits=3)
+                      source_license="ODbL", date_last_verified=_now(), price_credits=3,
+                      validation_json=hot_validation_json())
         s.add(hidden); s.commit(); s.refresh(hidden)
         sync_lead_categories(s, hidden)
     c = client()

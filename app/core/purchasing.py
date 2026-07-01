@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 
 from app.core.compliance import is_suppressed, is_opted_out, host_of, audit
 from app.core.db import (BuyerAccount, Lead, PurchasedLead, CreditTransaction, _now)
+from app.core.serve_filters import passes_serve_filters
 
 
 class InsufficientCredits(ValueError):
@@ -16,6 +17,10 @@ class LeadSuppressed(ValueError):
 
 
 class ComplianceNotAcknowledged(ValueError):
+    pass
+
+
+class LeadHeldBack(ValueError):
     pass
 
 
@@ -56,6 +61,8 @@ def unlock_lead(session: Session, user, lead_id: int) -> PurchasedLead:
                              phone=lead.phone, email=lead.public_email,
                              business_name=lead.business_name)):
         raise LeadSuppressed("lead is suppressed or opted out")
+    if not passes_serve_filters(session, ba.id, lead):
+        raise LeadHeldBack("lead does not meet the quality gate")
     price = lead.price_credits
     if ba.credits < price:
         raise InsufficientCredits(f"need {price}, have {ba.credits}")

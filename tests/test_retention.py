@@ -26,6 +26,8 @@ def test_expiry_for_and_is_expired():
 
 
 def test_search_excludes_expired():
+    from app.core.serve_filters import clear as _gate_off
+    _gate_off()  # gate-off: this test exercises retention expiry enforcement, not the quality gate
     engine = init_db("sqlite://")
     with Session(engine) as s:
         lead = Lead(business_name="Stale", category_keys_json=json.dumps(["restaurant"]),

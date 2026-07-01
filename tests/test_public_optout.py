@@ -27,6 +27,8 @@ def test_optout_form_reachable_without_login():
 
 
 def test_public_optout_suppresses_across_search_preview_unlock_export():
+    from app.core.serve_filters import clear as _gate_off
+    _gate_off()  # gate-off: this test exercises public opt-out suppression across all surfaces, not the quality gate
     c = TestClient(lv.app)
     with Session(lv.engine) as s:
         ba = BuyerAccount(company_name="B", credits=0, compliance_ack_at=_now())
