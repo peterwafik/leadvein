@@ -3,7 +3,9 @@
 **Date:** 2026-06-30
 **Status:** SPEC ONLY — for review. **Do NOT build yet.** Sequenced strictly AFTER the pilot-readiness
 checklist is green; not to be interleaved with pilot hardening.
-**Supersedes:** `2026-06-30-targeting-segmentation-design.md` (v1). v2 folds in the review findings
+**Supersedes:** `2026-06-30-targeting-segmentation-design.md` (v1).
+**Extended by:** `2026-07-01-campaign-layer-design.md` (Campaign layer — presets that compile to the
+Segment/composition machinery defined here). v2 folds in the review findings
 (C1, I1–I4, M1–M5). Architecture is unchanged from v1; the changes are evaluation-semantics and
 scope-boundary corrections. See §16 Changelog.
 **Scope:** a composable Targeting/Segmentation layer for the Recipe Builder — buyers compose filters &
