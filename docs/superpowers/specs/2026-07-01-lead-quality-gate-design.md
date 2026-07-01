@@ -203,6 +203,12 @@ app/core/… (targeting)      # UNCHANGED generic engine; no quality/provider st
   `validated` with `line_type=mobile`.
 - **INV-Q4 (tri-state tiers):** absent field ⇒ unknown ⇒ does not meet any required tier. **Test.**
 - **INV-Q5 (grep-clean core):** no quality/provider strings in `app/core`. **Test:** grep gate.
+- **INV-Q6 (never SMTP-probe; honest "Validated" over false "Verified" — PERMANENT):** the platform MUST
+  NEVER perform SMTP mailbox probing — or any equivalent intrusive liveness hack — to manufacture a
+  "Verified" tier. Not now, not later, not as a shortcut, not even if it looks free. Mailbox/line
+  liveness is **Verified-live ONLY** via a licensed provider or human confirmation. An honest "Validated"
+  always beats a fabricated "Verified." This is a standing rule and survives context resets. **Test:** the
+  email validator opens NO SMTP connection; no code path stamps `verified_live` from a self-run probe.
 - Inherits INV-1..INV-10 from the prior specs (tri-state, role-email allowlist, masking, grep, campaign).
 
 ---
