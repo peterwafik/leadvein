@@ -50,3 +50,11 @@ def test_seed_demo_buyer(monkeypatch):
     assert cfg.seed_demo_buyer() is False                # prod default off
     monkeypatch.setenv("LEADVAULT_SEED_DEMO_BUYER", "true")
     assert cfg.seed_demo_buyer() is True                 # explicit override
+
+
+def test_seed_demo_buyer_empty_string_is_unset(monkeypatch):
+    # a blank `.env` line (LEADVAULT_SEED_DEMO_BUYER=) loaded via load_dotenv must NOT
+    # be read as an explicit "false" — it falls through to the env default.
+    monkeypatch.delenv("LEADVAULT_ENV", raising=False)
+    monkeypatch.setenv("LEADVAULT_SEED_DEMO_BUYER", "")
+    assert cfg.seed_demo_buyer() is True                 # dev default, not False

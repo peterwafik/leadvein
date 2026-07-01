@@ -42,6 +42,7 @@ def admin_credentials() -> tuple[str, str] | None:
 
 def seed_demo_buyer() -> bool:
     v = os.getenv("LEADVAULT_SEED_DEMO_BUYER")
-    if v is not None:
-        return v.lower() in ("1", "true", "yes", "on")
+    if v:  # empty string or unset -> fall through to the env default (an empty
+           # .env line must NOT be read as an explicit "false")
+        return v.strip().lower() in ("1", "true", "yes", "on")
     return not is_prod()  # demo buyer seeded in dev only, by default
