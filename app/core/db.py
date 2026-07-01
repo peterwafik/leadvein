@@ -197,6 +197,17 @@ class IngestionJob(SQLModel, table=True):
     created_at: str = Field(default_factory=_now)
 
 
+class Segment(SQLModel, table=True):
+    __tablename__ = "lv_segment"
+    id: int | None = Field(default=None, primary_key=True)
+    buyer_account_id: int = Field(default=0, index=True)
+    name: str = ""
+    composition_json: str = "{}"
+    source_campaign_key: str = ""   # optional provenance (Campaign layer)
+    created_at: str = Field(default_factory=_now)
+    updated_at: str | None = None
+
+
 class LeadCategoryLink(SQLModel, table=True):
     __tablename__ = "lv_lead_category_link"
     id: int | None = Field(default=None, primary_key=True)
