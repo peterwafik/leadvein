@@ -24,7 +24,7 @@ class _HasRoleEmail:   # INV-2: business-role local-part allowlist ONLY
     reads = ["public_email"]; params_schema = {}
     def matches(self, view, params):
         val = get_path(view, "public_email")
-        if val is MISSING or not val:
+        if val is MISSING:   # truly-absent path -> unknown; empty string -> known "no role email" (False)
             return None
         return _local(val) in ROLE_PREFIXES
 

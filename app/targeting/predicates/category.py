@@ -15,6 +15,9 @@ class _CategoryAny:
         want = [c for c in (params.get("in") or []) if c]
         if not want:
             return None
+        # NOTE (INV-5): SQL parity relies on LeadCategoryLink staying in sync with
+        # category_keys_json. Any future path that edits a lead's categories MUST
+        # re-run sync_lead_categories, or this pushdown could over-narrow.
         ids = lead_ids_for_categories(session, want)
         return Lead.id.in_(ids) if ids else Lead.id.in_([-1])
 

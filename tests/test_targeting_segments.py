@@ -1,7 +1,7 @@
 import json
 from sqlmodel import Session
 from app.core.db import init_db, Segment
-from app.core.targeting.segments import (create_segment, list_segments, get_owned, update_segment)
+from app.core.targeting.segments import (create_segment, list_segments, get_owned, update_segment, delete_segment)
 
 
 def test_segment_crud_is_owner_scoped():
@@ -17,3 +17,14 @@ def test_segment_crud_is_owner_scoped():
         up = update_segment(s, seg.id, 1, name="renamed")
         assert up.name == "renamed" and up.updated_at is not None
         assert update_segment(s, seg.id, 2, name="hijack") is None  # cannot update others'
+
+
+def test_delete_segment_owner_scoped():
+    e = init_db("sqlite://")
+    with Session(e) as s:
+        comp = {"op": "AND", "nodes": [{"predicate": "geo.country", "params": {"value": "DE"}}]}
+        seg = create_segment(s, 1, "DE leads", comp)
+        assert delete_segment(s, seg.id, 2) is False   # not owner, still exists
+        assert get_owned(s, seg.id, 1) is not None     # still there
+        assert delete_segment(s, seg.id, 1) is True    # owner can delete
+        assert get_owned(s, seg.id, 1) is None         # gone

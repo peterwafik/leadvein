@@ -28,6 +28,15 @@ def get_owned(session: Session, segment_id: int, buyer_account_id: int):
     return seg
 
 
+def delete_segment(session: Session, segment_id: int, buyer_account_id: int) -> bool:
+    seg = get_owned(session, segment_id, buyer_account_id)
+    if seg is None:
+        return False
+    session.delete(seg)
+    session.commit()
+    return True
+
+
 def update_segment(session: Session, segment_id: int, buyer_account_id: int, *,
                    name: str | None = None, composition: dict | None = None):
     seg = get_owned(session, segment_id, buyer_account_id)

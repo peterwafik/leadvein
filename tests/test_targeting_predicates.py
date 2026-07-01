@@ -36,7 +36,7 @@ def test_role_email_allowlist_invariant():   # INV-2
     assert p.matches(_view(public_email="info@acme.com"), {}) is True
     assert p.matches(_view(public_email="sales@acme.com"), {}) is True
     assert p.matches(_view(public_email="john.smith@acme.com"), {}) is False   # personal -> NOT role
-    assert p.matches(_view(public_email=""), {}) is None                        # absent -> unknown
+    assert p.matches(_view(public_email=""), {}) is False                       # present-but-empty -> known no role email
 
 
 def test_web_signal_is_tristate():
