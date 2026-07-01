@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from app.core.db import init_db, Lead, _now
 from app.core.leadcats import sync_lead_categories
 from app.core.targeting import registry
-from app.core.targeting.runtime import register_targeting_runtime
+from app.targeting.runtime import register_targeting_runtime
 from app.core.targeting.composition import matching_by_composition, selects
 from app.core.targeting.view import lead_view
 

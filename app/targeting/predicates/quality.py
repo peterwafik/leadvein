@@ -9,7 +9,7 @@ class _MinScore:
     reads = ["score_total"]; params_schema = {"min": "int"}
     def matches(self, view, params):
         return int(view.get("score_total", 0)) >= int(params.get("min", 0))
-    def sql_pushdown(self, params):
+    def sql_pushdown(self, session, params):
         return Lead.score_total >= int(params.get("min", 0))
 
 
@@ -38,7 +38,7 @@ class _SourceType:
         if val is MISSING or not val:
             return None
         return str(val) == params.get("value")
-    def sql_pushdown(self, params):
+    def sql_pushdown(self, session, params):
         return Lead.source_key == params.get("value")
 
 

@@ -14,7 +14,7 @@ class _GeoEq:
             return None
         want = (params.get("value") or "")
         return want.lower() in str(val).lower() if want else None
-    def sql_pushdown(self, params):
+    def sql_pushdown(self, session, params):
         want = (params.get("value") or "")
         return self._col.ilike(f"%{want}%") if want else None
 

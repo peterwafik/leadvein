@@ -11,7 +11,12 @@ class _CategoryAny:
         if not want:
             return None
         return bool(set(view.get("category_keys") or []) & want)
-    # sql_pushdown needs the session -> handled specially in Task 6 via lead_ids_for_categories
+    def sql_pushdown(self, session, params):
+        want = [c for c in (params.get("in") or []) if c]
+        if not want:
+            return None
+        ids = lead_ids_for_categories(session, want)
+        return Lead.id.in_(ids) if ids else Lead.id.in_([-1])
 
 
 CATEGORY_ANY = _CategoryAny()
