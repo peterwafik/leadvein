@@ -1,5 +1,5 @@
 from app.core.targeting import registry
-from app.core.targeting.runtime import register_targeting_runtime
+from app.targeting.runtime import register_targeting_runtime
 from app.core.targeting.view import lead_view
 from app.core.db import Lead
 import json
