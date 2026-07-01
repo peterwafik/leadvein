@@ -90,6 +90,16 @@ Architecture: source-agnostic `app/core/` marketplace core + pluggable `app/adap
 (OSM/Overpass, urlscan-fingerprint) + `app/scoring/profiles/` (utility_energy is one profile).
 Adding a data source = adding an adapter; adding a vertical = adding a scoring profile.
 
+### Lead quality gate
+
+All leads pass through a configurable quality gate at search, preview, and unlock. The gate enforces a per-buyer quality profile (default BASELINE) that requires leads to meet or exceed a minimum tier:
+
+- **Present:** contact data exists (scraped or enriched).
+- **Validated:** email passes syntax + MX + non-disposable checks; phone passes format + line-type validation; address is geocodable; website is reachable; lead profile is ≥ 40% complete.
+- **Verified-live:** contact details verified against a licensed data provider (Dun & Bradstreet, ZoomInfo, etc.). Leads claiming this tier but lacking an active provider license render as "not available — requires verification/enrichment provider."
+
+Leads below the active profile's minimum tier are held back from search results, masked in previews, and cannot be unlocked. All email validation uses syntax/MX/disposable checks only — **SMTP probes are permanently disabled** (INV-Q6) to respect bounce-back policies.
+
 ### Production / pilot deployment
 
 Set `LEADVAULT_ENV=prod` and the app enforces hardening:
