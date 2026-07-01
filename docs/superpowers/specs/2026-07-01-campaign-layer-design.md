@@ -1,7 +1,8 @@
 # LeadVault — Campaign Layer (Design Spec)
 
 **Date:** 2026-07-01
-**Status:** SPEC ONLY — for review. **Do NOT build yet.**
+**Status:** 🔒 **LOCKED (approved 2026-07-01).** Design is final; no further changes without an explicit
+re-open. SPEC ONLY — no code until the build gate below is met. **Do NOT build yet.**
 **Extends:** `2026-06-30-targeting-segmentation-design-v2.md` (Targeting v2). This is a higher-level
 layer *on top of* v2 — it reuses v2's predicate composition + Segment + scoring machinery verbatim and
 adds no parallel engine.
