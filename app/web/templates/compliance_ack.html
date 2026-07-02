@@ -1,11 +1,40 @@
-{% extends "base.html" %}{% block body %}
-<div class="max-w-lg mx-auto bg-white p-6 rounded-xl border mt-10 text-sm">
-  <h1 class="text-lg font-semibold mb-3">Compliance acknowledgement</h1>
-  <ul class="list-disc pl-5 space-y-1 text-slate-600">
-    <li>I am responsible for lawful B2B outreach and will respect opt-outs.</li>
-    <li>I will not use these leads for spam and will follow applicable marketing law.</li>
-    <li>I will use suppression lists and will not resell leads unless permitted.</li>
-    <li>I understand data is business-level, from lawful public/official/licensed sources with attribution.</li>
-  </ul>
-  <form method="post" action="/app/ack" class="mt-4"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="bg-emerald-600 text-white rounded-lg px-4 py-2">I acknowledge</button></form>
-</div>{% endblock %}
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Compliance{% endblock %}
+{% block body %}
+<div class="max-w-2xl">
+{{ ui.page_intro('Compliance acknowledgement', 'Before you make your first purchase, please read and accept these terms. They protect you, the businesses in our marketplace, and LeadVault.') }}
+
+{% call ui.card(extra='p-6') %}
+<h3 class="text-sm font-semibold text-ink-700 mb-4">You are confirming that:</h3>
+<ul class="space-y-3 mb-6">
+  <li class="flex items-start gap-3">
+    <svg class="mt-0.5 shrink-0 text-brand-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+    <span class="text-sm text-ink-700">You are responsible for lawful B2B outreach and will respect opt-outs.</span>
+  </li>
+  <li class="flex items-start gap-3">
+    <svg class="mt-0.5 shrink-0 text-brand-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+    <span class="text-sm text-ink-700">You will not use these leads for spam and will follow applicable marketing law.</span>
+  </li>
+  <li class="flex items-start gap-3">
+    <svg class="mt-0.5 shrink-0 text-brand-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+    <span class="text-sm text-ink-700">You will use suppression lists and will not resell leads unless permitted.</span>
+  </li>
+  <li class="flex items-start gap-3">
+    <svg class="mt-0.5 shrink-0 text-brand-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+    <span class="text-sm text-ink-700">You understand data is business-level, from lawful public/official/licensed sources with attribution.</span>
+  </li>
+</ul>
+
+<div class="border-t border-slate-100 pt-5">
+  <form method="post" action="/app/ack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="flex flex-wrap items-center gap-4">
+      {{ ui.btn('I acknowledge and accept', type='submit', kind='primary') }}
+      <p class="text-[12.5px] text-ink-500">This is logged against your account.</p>
+    </div>
+  </form>
+</div>
+{% endcall %}
+</div>
+{% endblock %}

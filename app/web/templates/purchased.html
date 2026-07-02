@@ -1,7 +1,46 @@
-{% extends "base.html" %}{% block body %}
-<div class="flex justify-between mb-4"><h1 class="text-xl font-semibold">Purchased Leads</h1>
-<a href="/app/export.csv" class="text-sm border rounded-lg px-3 py-1">Export CSV</a></div>
-<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm">
-<thead class="bg-slate-100"><tr><th class="text-left p-2">Business</th><th class="text-left p-2">City</th><th class="text-left p-2">Phone</th><th class="text-left p-2">Email</th><th class="text-left p-2">Score</th><th class="text-left p-2">Status</th><th></th></tr></thead>
-<tbody>{% for r in rows %}<tr class="border-t"><td class="p-2">{{ r.business_name }}</td><td class="p-2">{{ r.city }}</td><td class="p-2">{{ r.phone }}</td><td class="p-2">{{ r.public_email }}</td><td class="p-2">{{ r.score_total }}</td><td class="p-2">{{ r.status }}</td><td class="p-2"><a class="text-emerald-600 underline" href="/app/purchased/{{ r.lead_id }}">View</a></td></tr>{% endfor %}</tbody>
-</table></div>{% endblock %}
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Purchased leads{% endblock %}
+{% block topbar %}
+  {{ ui.btn('Export CSV', href='/app/export.csv', kind='secondary') }}
+{% endblock %}
+{% block body %}
+{{ ui.page_intro('Purchased leads', 'Every lead you have unlocked. Contact details are shown in full. Export to CSV for use in your CRM or dialler.') }}
+
+{% if rows %}
+  {% call ui.card(extra='overflow-x-auto') %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200">
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Business</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">City</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Phone</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Email</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Score</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Status</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60 transition">
+        <td class="px-4 py-3 font-medium text-ink-900">{{ r.business_name }}</td>
+        <td class="px-4 py-3 text-ink-600">{{ r.city }}</td>
+        <td class="px-4 py-3 text-ink-700">{{ r.phone }}</td>
+        <td class="px-4 py-3 text-ink-700">{{ r.public_email }}</td>
+        <td class="px-4 py-3">{{ ui.badge(r.score_total, 'brand' if r.score_total >= 70 else 'neutral') }}</td>
+        <td class="px-4 py-3">{{ ui.badge(r.status, 'green' if r.status == 'active' else 'neutral') }}</td>
+        <td class="px-4 py-3 text-right">
+          <a href="/app/purchased/{{ r.lead_id }}" class="text-[13px] font-medium text-brand-600 hover:text-brand-700">View &rarr;</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+{% else %}
+  {{ ui.empty_state('No purchased leads yet',
+     'Browse the <a href="/app/marketplace" class="text-brand-600 underline">marketplace</a> to find and unlock leads. They will appear here once unlocked.',
+     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h4l1.5 2.5h5L16 13h4"/><path d="M4 13 6 5h12l2 8v6H4Z"/></svg>') }}
+{% endif %}
+{% endblock %}

@@ -1,4 +1,46 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Leads ({{ rows|length }})</h1>
-<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">Business</th><th class="text-left p-2">City</th><th class="text-left p-2">Score</th><th class="text-left p-2">Source</th><th class="text-left p-2">License</th><th class="text-left p-2">Opt-out</th></tr></thead>
-<tbody>{% for r in rows %}<tr class="border-t"><td class="p-2">{{ r.lead.business_name }}</td><td class="p-2">{{ r.lead.city }}</td><td class="p-2">{{ r.lead.score_total }}</td><td class="p-2">{{ r.lead.source_name }}</td><td class="p-2">{{ r.lead.source_license }}</td><td class="p-2">{{ "opted_out" if r.opted_out else "clear" }}</td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Leads{% endblock %}
+{% block body %}
+{{ ui.page_intro('Lead inventory', 'All leads currently in the system. Opted-out leads are flagged but retained for audit purposes until purged.') }}
+
+{% if rows %}
+  <p class="text-[13px] text-ink-500 mb-4">{{ rows|length }} lead{{ 's' if rows|length != 1 else '' }} in inventory.</p>
+  {% call ui.card(extra='overflow-x-auto') %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200">
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Business</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">City</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Score</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Source</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">License</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Opt-out</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60 transition">
+        <td class="px-4 py-3 font-medium text-ink-900">{{ r.lead.business_name }}</td>
+        <td class="px-4 py-3 text-ink-600">{{ r.lead.city }}</td>
+        <td class="px-4 py-3">{{ ui.badge(r.lead.score_total, 'brand' if r.lead.score_total >= 70 else 'neutral') }}</td>
+        <td class="px-4 py-3 text-ink-600">{{ r.lead.source_name }}</td>
+        <td class="px-4 py-3 text-ink-500 text-[12px]">{{ r.lead.source_license }}</td>
+        <td class="px-4 py-3">
+          {% if r.opted_out %}
+            {{ ui.badge('opted out', 'amber') }}
+          {% else %}
+            {{ ui.badge('clear', 'green') }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+{% else %}
+  {{ ui.empty_state('No leads in inventory',
+     'Run an ingestion job to populate the lead inventory.',
+     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>') }}
+{% endif %}
+{% endblock %}

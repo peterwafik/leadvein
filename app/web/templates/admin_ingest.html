@@ -1,12 +1,68 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Ingestion</h1>
-<form method="post" action="/admin/ingest" class="bg-white p-4 rounded-xl border grid grid-cols-2 gap-3 text-sm">
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Ingestion{% endblock %}
+{% block body %}
+{{ ui.page_intro('Run ingestion', 'Fetch leads from a source adapter and store them in the inventory. Duplicates and compliance-blocked records are skipped automatically.') }}
+
+{% call ui.card(extra='p-5 mb-6') %}
+<form method="post" action="/admin/ingest" class="grid gap-4 sm:grid-cols-2">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <label>Source adapter<select name="adapter_key" class="mt-1 w-full border rounded-lg p-2">{% for a in adapters %}<option>{{ a }}</option>{% endfor %}</select></label>
-  <label>Scoring profile<input name="scoring_profile_key" value="utility_energy" class="mt-1 w-full border rounded-lg p-2"></label>
-  <label>City / area<input name="city" class="mt-1 w-full border rounded-lg p-2" placeholder="London"></label>
-  <label>Categories<input name="categories" class="mt-1 w-full border rounded-lg p-2" placeholder="restaurant, cafe, gym"></label>
-  <button class="col-span-2 bg-emerald-600 text-white rounded-lg py-2">Run ingestion</button>
+
+  {% call ui.field('Source adapter', 'The data connector to use for this ingestion run.') %}
+    <div class="relative">
+      <select name="adapter_key"
+              class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-9 text-sm text-ink-900 shadow-sm transition hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+        {% for a in adapters %}<option>{{ a }}</option>{% endfor %}
+      </select>
+      <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+  {% endcall %}
+
+  {% call ui.field('Scoring profile', 'The scoring model to apply to ingested leads.') %}
+    <input name="scoring_profile_key" value="utility_energy"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  {% call ui.field('City / area', 'Restrict ingestion to a specific geographic area.') %}
+    <input name="city" placeholder="London"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  {% call ui.field('Categories', 'Comma-separated OSM amenity/shop tags to fetch.') %}
+    <input name="categories" placeholder="restaurant, cafe, gym"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  <div class="sm:col-span-2 flex justify-end border-t border-slate-100 pt-4">
+    {{ ui.btn('Run ingestion', type='submit', kind='primary') }}
+  </div>
 </form>
-{% if result %}<p class="mt-3 text-sm text-slate-700">Discovered {{ result.discovered }}, stored {{ result.stored }}, duplicates {{ result.skipped_duplicate }}, compliance-skipped {{ result.skipped_compliance }}. <a class="text-emerald-600 underline" href="/admin/leads">View leads</a></p>{% endif %}
+{% endcall %}
+
+{% if result %}
+{% call ui.card(extra='p-5') %}
+<h3 class="text-sm font-semibold text-ink-700 mb-3">Ingestion result</h3>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+  <div>
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">Discovered</p>
+    <p class="text-2xl font-bold text-ink-900 mt-0.5">{{ result.discovered }}</p>
+  </div>
+  <div>
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">Stored</p>
+    <p class="text-2xl font-bold text-brand-600 mt-0.5">{{ result.stored }}</p>
+  </div>
+  <div>
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">Duplicates</p>
+    <p class="text-2xl font-bold text-ink-500 mt-0.5">{{ result.skipped_duplicate }}</p>
+  </div>
+  <div>
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">Compliance skip</p>
+    <p class="text-2xl font-bold text-ink-500 mt-0.5">{{ result.skipped_compliance }}</p>
+  </div>
+</div>
+<div class="mt-4">
+  {{ ui.btn('View leads', href='/admin/leads', kind='secondary') }}
+</div>
+{% endcall %}
+{% endif %}
 {% endblock %}

@@ -1,13 +1,43 @@
-{% extends "base.html" %}{% block body %}
-<div class="max-w-sm mx-auto mt-20 bg-white p-6 rounded-xl border shadow-sm">
-  <div class="text-xl font-semibold text-emerald-600 mb-4">Create account</div>
-  {% if error %}<p class="text-red-600 text-sm mb-2">{{ error }}</p>{% endif %}
-  <form method="post" action="/register" class="space-y-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <input name="company" placeholder="Company name" class="w-full border rounded-lg p-2" required>
-    <input name="email" type="email" placeholder="Email" class="w-full border rounded-lg p-2" required>
-    <input name="password" type="password" placeholder="Password" class="w-full border rounded-lg p-2" required>
-    <button class="w-full bg-emerald-600 text-white rounded-lg py-2">Register</button>
-  </form>
-  <p class="text-xs text-slate-500 mt-3">Have an account? <a href="/login" class="text-emerald-600 underline">Log in</a></p>
-</div>{% endblock %}
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block auth %}
+<div class="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+  <div class="w-full max-w-sm">
+
+    <!-- Logo mark -->
+    <div class="mb-8 flex flex-col items-center gap-2">
+      <span class="grid h-11 w-11 place-items-center rounded-xl bg-brand-600 text-white font-bold text-lg">LV</span>
+      <span class="text-xl font-semibold tracking-tight text-ink-900">LeadVault</span>
+      <p class="text-sm text-ink-500">Create your buyer account</p>
+    </div>
+
+    {% call ui.card() %}
+    <div class="p-6 space-y-5">
+      {% if error %}{{ ui.banner(error, 'error') }}{% endif %}
+
+      <form method="post" action="/register" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        {% call ui.field('Company name') %}
+          {{ ui.input('company', placeholder='Acme Ltd') }}
+        {% endcall %}
+        {% call ui.field('Work email') %}
+          {{ ui.input('email', type='email', placeholder='you@company.com') }}
+        {% endcall %}
+        {% call ui.field('Password', 'At least 8 characters.') %}
+          {{ ui.input('password', type='password', placeholder='••••••••') }}
+        {% endcall %}
+        <button type="submit"
+                class="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 active:translate-y-px focus-visible:ring-2 focus-visible:ring-brand-500/40">
+          Create account
+        </button>
+      </form>
+
+      <p class="border-t border-slate-100 pt-4 text-center text-[13px] text-ink-500">
+        Already have an account? <a href="/login" class="font-medium text-brand-600 hover:text-brand-700">Sign in</a>
+      </p>
+    </div>
+    {% endcall %}
+
+  </div>
+</div>
+{% endblock %}

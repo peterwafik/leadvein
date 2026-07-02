@@ -1,13 +1,69 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Lead Recipes</h1>
-<form method="post" action="/app/recipes" class="bg-white p-4 rounded-xl border grid grid-cols-2 gap-3 mb-4 text-sm">
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Saved searches{% endblock %}
+{% block body %}
+{{ ui.page_intro('Saved searches', 'Save a set of filters as a recipe to quickly re-run your favourite searches without re-entering every filter each time.') }}
+
+{% call ui.card(extra='p-5 mb-6') %}
+<h3 class="text-sm font-semibold text-ink-700 mb-4">New saved search</h3>
+<form method="post" action="/app/recipes" class="grid gap-4 sm:grid-cols-2">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <label>Name<input name="name" class="mt-1 w-full border rounded-lg p-2" required></label>
-  <label>Scoring profile<input name="scoring_profile_key" value="utility_energy" class="mt-1 w-full border rounded-lg p-2"></label>
-  <label>Categories<input name="categories" class="mt-1 w-full border rounded-lg p-2" placeholder="restaurant, cafe"></label>
-  <label>City<input name="city" class="mt-1 w-full border rounded-lg p-2"></label>
-  <label>Min score<input name="min_score" type="number" value="50" class="mt-1 w-full border rounded-lg p-2"></label>
-  <label class="flex items-center gap-2 mt-5"><input type="checkbox" name="require_phone"> Require phone</label>
-  <button class="col-span-2 bg-emerald-600 text-white rounded-lg py-2">Save recipe</button>
+
+  {% call ui.field('Recipe name', 'A short label so you remember what this search targets.') %}
+    <input name="name" required placeholder="e.g. Oxford restaurants"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  {% call ui.field('Scoring profile', 'The scoring model to apply when ranking results.') %}
+    <input name="scoring_profile_key" value="utility_energy"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  {% call ui.field('Business types', 'Comma-separated list of OSM categories, e.g. restaurant, cafe.') %}
+    <input name="categories" placeholder="restaurant, cafe"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  {% call ui.field('Area', 'A UK town or city to focus on.') %}
+    <input name="city" placeholder="e.g. Oxford"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  {% call ui.field('Minimum score', 'Only include leads at or above this quality score (0–100).') %}
+    <input name="min_score" type="number" value="50"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  <div class="flex items-end pb-0.5">
+    <label class="flex items-center gap-2.5 text-sm text-ink-600 cursor-pointer">
+      <input type="checkbox" name="require_phone" class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40">
+      <span>Require phone number</span>
+    </label>
+  </div>
+
+  <div class="sm:col-span-2 flex justify-end border-t border-slate-100 pt-4">
+    {{ ui.btn('Save recipe', type='submit', kind='primary') }}
+  </div>
 </form>
-<div class="space-y-2">{% for r in recipes %}<div class="bg-white p-3 rounded-xl border text-sm">{{ r.name }} — profile {{ r.scoring_profile_key }}</div>{% endfor %}</div>{% endblock %}
+{% endcall %}
+
+{% if recipes %}
+  <div class="space-y-3">
+    {% for r in recipes %}
+    {% call ui.card() %}
+    <div class="flex items-center justify-between gap-4 px-4 py-3">
+      <div>
+        <p class="text-sm font-semibold text-ink-900">{{ r.name }}</p>
+        <p class="text-[12.5px] text-ink-500 mt-0.5">Profile: {{ r.scoring_profile_key }}</p>
+      </div>
+      {{ ui.badge('recipe', 'neutral') }}
+    </div>
+    {% endcall %}
+    {% endfor %}
+  </div>
+{% else %}
+  {{ ui.empty_state('No saved searches yet',
+     'Save a recipe above to quickly re-run a search without filling out the filters each time.',
+     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>') }}
+{% endif %}
+{% endblock %}

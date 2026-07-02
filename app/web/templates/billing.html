@@ -1,29 +1,115 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Billing</h1>
-{% if status == "success" %}<p class="text-sm text-emerald-700 mb-3">Payment received — your credits will appear shortly.</p>{% endif %}
-{% if status in ("cancel","disabled","badpack","error") %}<p class="text-sm text-amber-700 mb-3">Checkout was not completed ({{ status }}).</p>{% endif %}
-<div class="bg-white p-4 rounded-xl border mb-4"><div class="text-3xl font-bold text-emerald-600">{{ credits }}</div><div class="text-sm text-slate-500">Credits</div></div>
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Billing & credits{% endblock %}
+{% block topbar %}{{ ui.credits_pill(credits if credits is defined else '—') }}{% endblock %}
+{% block body %}
+{{ ui.page_intro('Billing & credits', 'Each lead unlock costs 1 credit. Top up here, or ask your admin to grant credits directly.') }}
 
-<h2 class="font-medium mb-2">Buy credits</h2>
-{% if billing_enabled %}
-<div class="grid grid-cols-3 gap-4 mb-6">
-  {% for p in packs %}
-  <div class="bg-white p-4 rounded-xl border text-center">
-    <div class="text-2xl font-bold">{{ p.credits }}</div>
-    <div class="text-sm text-slate-500 mb-3">{{ p.label }}</div>
-    <form method="post" action="/app/billing/checkout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="pack_key" value="{{ p.key }}"><button class="w-full bg-emerald-600 text-white rounded-lg py-2">Buy</button></form>
-  </div>
-  {% endfor %}
-</div>
-{% else %}
-<p class="text-sm text-slate-500 mb-6">Card payments are not configured in this deployment — credits are admin-granted. (Set <code>STRIPE_SECRET_KEY</code> to enable.)</p>
+{% if status == "success" %}
+  {{ ui.banner('Payment received — your credits will appear in your balance shortly.', 'success') }}
+{% endif %}
+{% if status in ("cancel", "disabled", "badpack", "error") %}
+  {{ ui.banner('Checkout was not completed (' ~ status ~ '). No charge was made.', 'warn') }}
 {% endif %}
 
-<h2 class="font-medium mb-2">Purchases</h2>
-<div class="bg-white rounded-xl border overflow-auto mb-6"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">When</th><th class="text-left p-2">Pack</th><th class="text-left p-2">Credits</th><th class="text-left p-2">Status</th></tr></thead>
-<tbody>{% for p in payments %}<tr class="border-t"><td class="p-2">{{ p.created_at }}</td><td class="p-2">{{ p.pack_key }}</td><td class="p-2">{{ p.credits }}</td><td class="p-2">{{ p.status }}</td></tr>{% endfor %}</tbody></table></div>
+<!-- Current balance -->
+{% call ui.card(extra='p-5 mb-6') %}
+<div class="flex items-center gap-4">
+  <div class="grid h-14 w-14 place-items-center rounded-xl bg-brand-50">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v10M9.2 9.4A3 3 0 0 1 12 8c1.7 0 3 1 3 2s-1.3 2-3 2-3 1-3 2 1.3 2 3 2a3 3 0 0 0 2.8-1.4" stroke-linecap="round"/></svg>
+  </div>
+  <div>
+    <p class="text-3xl font-bold text-brand-600">{{ credits }}</p>
+    <p class="text-sm text-ink-500">credits in your account</p>
+  </div>
+</div>
+{% endcall %}
 
-<h2 class="font-medium mb-2">Credit ledger</h2>
-<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">When</th><th class="text-left p-2">Delta</th><th class="text-left p-2">Reason</th><th class="text-left p-2">Ref</th></tr></thead>
-<tbody>{% for t in txns %}<tr class="border-t"><td class="p-2">{{ t.created_at }}</td><td class="p-2">{{ t.delta }}</td><td class="p-2">{{ t.reason }}</td><td class="p-2">{{ t.ref }}</td></tr>{% endfor %}</tbody></table></div>
+<!-- Buy credits -->
+<h2 class="text-base font-semibold text-ink-900 mb-3">Buy credits</h2>
+{% if billing_enabled %}
+  <div class="grid gap-4 sm:grid-cols-3 mb-8">
+    {% for p in packs %}
+    {% call ui.card() %}
+    <div class="flex flex-col items-center p-5 text-center">
+      <p class="text-3xl font-bold text-ink-900">{{ p.credits }}</p>
+      <p class="mt-1 text-sm text-ink-500 mb-4">{{ p.label }}</p>
+      <form method="post" action="/app/billing/checkout" class="w-full">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <input type="hidden" name="pack_key" value="{{ p.key }}">
+        <button type="submit"
+                class="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 active:translate-y-px">
+          Buy
+        </button>
+      </form>
+    </div>
+    {% endcall %}
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="mb-8">
+    {{ ui.banner('Card payments are not configured in this deployment — credits are admin-granted. Set <code>STRIPE_SECRET_KEY</code> to enable.', 'info') }}
+  </div>
+{% endif %}
+
+<!-- Payment history -->
+<h2 class="text-base font-semibold text-ink-900 mb-3">Payment history</h2>
+{% if payments %}
+  {% call ui.card(extra='overflow-x-auto mb-8') %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200">
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">When</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Pack</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Credits</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in payments %}
+      <tr class="border-t border-slate-100">
+        <td class="px-4 py-3 text-ink-600">{{ p.created_at }}</td>
+        <td class="px-4 py-3 text-ink-700">{{ p.pack_key }}</td>
+        <td class="px-4 py-3 font-medium text-ink-900">{{ p.credits }}</td>
+        <td class="px-4 py-3">{{ ui.badge(p.status, 'green' if p.status == 'paid' else 'neutral') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+{% else %}
+  <div class="mb-8">
+    {{ ui.empty_state('No payments yet', 'Your purchase history will appear here after your first top-up.') }}
+  </div>
+{% endif %}
+
+<!-- Credit ledger -->
+<h2 class="text-base font-semibold text-ink-900 mb-3">Credit ledger</h2>
+<p class="text-[13px] text-ink-500 mb-3">A full record of every credit added or spent on your account.</p>
+{% if txns %}
+  {% call ui.card(extra='overflow-x-auto') %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200">
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">When</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Delta</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Reason</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Reference</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in txns %}
+      <tr class="border-t border-slate-100">
+        <td class="px-4 py-3 text-ink-600">{{ t.created_at }}</td>
+        <td class="px-4 py-3 font-semibold {{ 'text-brand-600' if t.delta > 0 else 'text-red-600' }}">{{ '+' if t.delta > 0 else '' }}{{ t.delta }}</td>
+        <td class="px-4 py-3 text-ink-700">{{ t.reason }}</td>
+        <td class="px-4 py-3 text-ink-500 font-mono text-[12px]">{{ t.ref }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+{% else %}
+  {{ ui.empty_state('No transactions yet', 'All credit movements (top-ups, unlocks, admin grants) will appear here.') }}
+{% endif %}
 {% endblock %}

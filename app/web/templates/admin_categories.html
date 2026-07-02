@@ -1,10 +1,47 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Categories</h1>
-<form method="post" action="/admin/categories" class="bg-white p-4 rounded-xl border flex gap-3 mb-4 text-sm">
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Categories{% endblock %}
+{% block body %}
+{{ ui.page_intro('Business categories', 'Manage the canonical category list. Keys map to OSM amenity/shop tags; labels are shown to buyers in the marketplace.') }}
+
+{% call ui.card(extra='p-5 mb-6') %}
+<h3 class="text-sm font-semibold text-ink-700 mb-4">Add / update category</h3>
+<form method="post" action="/admin/categories" class="flex flex-wrap items-end gap-3">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <input name="key" placeholder="key (e.g. florist)" class="border rounded-lg p-2" required>
-  <input name="label" placeholder="Label (e.g. Florist)" class="border rounded-lg p-2" required>
-  <button class="bg-emerald-600 text-white rounded-lg px-3 py-1">Add / update</button>
+  <div class="space-y-1.5">
+    <label class="block text-sm font-medium text-ink-700">Key</label>
+    <input name="key" required placeholder="e.g. florist"
+           class="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 w-44">
+  </div>
+  <div class="space-y-1.5">
+    <label class="block text-sm font-medium text-ink-700">Label</label>
+    <input name="label" required placeholder="e.g. Florist"
+           class="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 w-44">
+  </div>
+  {{ ui.btn('Add / update', type='submit', kind='primary') }}
 </form>
-<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">Key</th><th class="text-left p-2">Label</th></tr></thead>
-<tbody>{% for c in cats %}<tr class="border-t"><td class="p-2">{{ c.key }}</td><td class="p-2">{{ c.label }}</td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% endcall %}
+
+{% if cats %}
+  {% call ui.card(extra='overflow-x-auto') %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200">
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Key</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Label</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cats %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60 transition">
+        <td class="px-4 py-3 font-mono text-[12px] text-ink-600">{{ c.key }}</td>
+        <td class="px-4 py-3 font-medium text-ink-900">{{ c.label }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+{% else %}
+  {{ ui.empty_state('No categories yet', 'Add a category above to start classifying leads.') }}
+{% endif %}
+{% endblock %}

@@ -1,16 +1,57 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Admin Overview</h1>
-<div class="grid grid-cols-2 gap-4">
-  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_leads }}</div><div class="text-sm text-slate-500">Leads in inventory</div></div>
-  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_sources }}</div><div class="text-sm text-slate-500">Sources</div></div>
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Admin overview{% endblock %}
+{% block body %}
+{{ ui.page_intro('Admin overview', 'Platform health at a glance — inventory stats, credit grants, and data housekeeping.') }}
+
+<div class="grid gap-4 sm:grid-cols-2 mb-6">
+  {% call ui.card() %}
+  <div class="p-5">
+    <p class="text-[12px] font-semibold uppercase tracking-wider text-ink-400">Leads in inventory</p>
+    <p class="mt-1.5 text-3xl font-bold text-ink-900">{{ n_leads }}</p>
+    <p class="mt-0.5 text-[13px] text-ink-500">total leads available</p>
+  </div>
+  {% endcall %}
+
+  {% call ui.card() %}
+  <div class="p-5">
+    <p class="text-[12px] font-semibold uppercase tracking-wider text-ink-400">Sources</p>
+    <p class="mt-1.5 text-3xl font-bold text-ink-900">{{ n_sources }}</p>
+    <p class="mt-0.5 text-[13px] text-ink-500">configured data sources</p>
+  </div>
+  {% endcall %}
 </div>
-<form method="post" action="/admin/grant" class="bg-white p-4 rounded-xl border mt-4 flex gap-3 text-sm items-end">
+
+<!-- Grant credits -->
+{% call ui.card(extra='p-5 mb-5') %}
+<h3 class="text-sm font-semibold text-ink-700 mb-1">Grant credits to a buyer</h3>
+<p class="text-[12.5px] text-ink-500 mb-4">Manually top up a buyer account. Use the account ID from the database.</p>
+<form method="post" action="/admin/grant" class="flex flex-wrap items-end gap-3">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  <label>Buyer account id<input name="buyer_account_id" type="number" class="mt-1 block border rounded-lg p-2"></label>
-  <label>Credits<input name="amount" type="number" class="mt-1 block border rounded-lg p-2"></label>
-  <button class="bg-emerald-600 text-white rounded-lg px-3 py-2">Grant credits</button>
+  <div class="space-y-1.5">
+    <label class="block text-sm font-medium text-ink-700">Buyer account ID</label>
+    <input name="buyer_account_id" type="number"
+           class="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 w-44">
+  </div>
+  <div class="space-y-1.5">
+    <label class="block text-sm font-medium text-ink-700">Credits to grant</label>
+    <input name="amount" type="number"
+           class="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 w-32">
+  </div>
+  {{ ui.btn('Grant credits', type='submit', kind='primary') }}
 </form>
-<div class="bg-white p-4 rounded-xl border mt-4 text-sm">
-  <div class="mb-2"><b>{{ n_expired }}</b> leads past retention. Sold leads are retained.</div>
-  <form method="post" action="/admin/purge-expired"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="bg-red-600 text-white rounded-lg px-3 py-1">Purge expired (unsold)</button></form>
-</div>{% endblock %}
+{% endcall %}
+
+<!-- Retention / housekeeping -->
+{% call ui.card(extra='p-5') %}
+<h3 class="text-sm font-semibold text-ink-700 mb-1">Data retention</h3>
+<p class="text-[12.5px] text-ink-500 mb-4">
+  <strong class="text-ink-700">{{ n_expired }}</strong> lead{{ 's' if n_expired != 1 else '' }} past retention window.
+  Sold leads are always retained; only unsold leads are eligible for purging.
+</p>
+<form method="post" action="/admin/purge-expired">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {{ ui.btn('Purge expired (unsold)', type='submit', kind='danger') }}
+</form>
+{% endcall %}
+{% endblock %}

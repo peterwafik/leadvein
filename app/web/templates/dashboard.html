@@ -1,9 +1,43 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Dashboard</h1>
-<div class="grid grid-cols-3 gap-4">
-  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold text-emerald-600">{{ credits }}</div><div class="text-sm text-slate-500">Credits</div></div>
-  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_purchased }}</div><div class="text-sm text-slate-500">Purchased leads</div></div>
-  <div class="bg-white p-4 rounded-xl border"><div class="text-3xl font-bold">{{ n_recipes }}</div><div class="text-sm text-slate-500">Saved recipes</div></div>
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Dashboard{% endblock %}
+{% block topbar %}{{ ui.credits_pill(credits if credits is defined else '—') }}{% endblock %}
+{% block body %}
+{{ ui.page_intro('Welcome back', 'A quick snapshot of your account. Browse the marketplace to find and unlock leads.') }}
+
+{% if not acked %}
+  {{ ui.banner('You must accept the compliance terms before your first purchase. <a href="/app/ack" class="underline font-semibold">Review &amp; accept &rarr;</a>', 'warn') }}
+{% endif %}
+
+<div class="grid gap-4 sm:grid-cols-3">
+  {% call ui.card() %}
+  <div class="p-5">
+    <p class="text-[12px] font-semibold uppercase tracking-wider text-ink-400">Credits</p>
+    <p class="mt-1.5 text-3xl font-bold text-brand-600">{{ credits }}</p>
+    <p class="mt-0.5 text-[13px] text-ink-500">available to spend</p>
+  </div>
+  {% endcall %}
+
+  {% call ui.card() %}
+  <div class="p-5">
+    <p class="text-[12px] font-semibold uppercase tracking-wider text-ink-400">Purchased leads</p>
+    <p class="mt-1.5 text-3xl font-bold text-ink-900">{{ n_purchased }}</p>
+    <p class="mt-0.5 text-[13px] text-ink-500">unlocked so far</p>
+  </div>
+  {% endcall %}
+
+  {% call ui.card() %}
+  <div class="p-5">
+    <p class="text-[12px] font-semibold uppercase tracking-wider text-ink-400">Saved searches</p>
+    <p class="mt-1.5 text-3xl font-bold text-ink-900">{{ n_recipes }}</p>
+    <p class="mt-0.5 text-[13px] text-ink-500">search recipes saved</p>
+  </div>
+  {% endcall %}
 </div>
-{% if not acked %}<p class="mt-4 text-sm text-amber-700">You must accept the compliance terms before your first purchase. <a class="underline" href="/app/ack">Review &amp; accept</a></p>{% endif %}
+
+<div class="mt-6 flex flex-wrap gap-3">
+  {{ ui.btn('Browse marketplace', href='/app/marketplace', kind='primary') }}
+  {{ ui.btn('View purchases', href='/app/purchased', kind='secondary') }}
+  {{ ui.btn('Billing & credits', href='/app/billing', kind='secondary') }}
+</div>
 {% endblock %}

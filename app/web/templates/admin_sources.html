@@ -1,4 +1,37 @@
-{% extends "base.html" %}{% block body %}
-<h1 class="text-xl font-semibold mb-4">Sources</h1>
-<div class="bg-white rounded-xl border overflow-auto"><table class="w-full text-sm"><thead class="bg-slate-100"><tr><th class="text-left p-2">Key</th><th class="text-left p-2">Name</th><th class="text-left p-2">Type</th><th class="text-left p-2">License</th><th class="text-left p-2">Terms</th></tr></thead>
-<tbody>{% for s in rows %}<tr class="border-t"><td class="p-2">{{ s.key }}</td><td class="p-2">{{ s.name }}</td><td class="p-2">{{ s.type }}</td><td class="p-2">{{ s.license }}</td><td class="p-2">{{ s.terms_status }}</td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Sources{% endblock %}
+{% block body %}
+{{ ui.page_intro('Data sources', 'All configured data source adapters and their compliance status. Each source must have accepted terms before leads can be ingested from it.') }}
+
+{% if rows %}
+  {% call ui.card(extra='overflow-x-auto') %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200">
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Key</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Name</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Type</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">License</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Terms status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in rows %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60 transition">
+        <td class="px-4 py-3 font-mono text-[12px] text-ink-600">{{ s.key }}</td>
+        <td class="px-4 py-3 font-medium text-ink-900">{{ s.name }}</td>
+        <td class="px-4 py-3">{{ ui.badge(s.type, 'blue') }}</td>
+        <td class="px-4 py-3 text-ink-600 text-[12px]">{{ s.license }}</td>
+        <td class="px-4 py-3">{{ ui.badge(s.terms_status, 'green' if s.terms_status == 'accepted' else 'amber') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+{% else %}
+  {{ ui.empty_state('No sources configured',
+     'Data sources are defined in the application configuration.',
+     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg>') }}
+{% endif %}
+{% endblock %}
