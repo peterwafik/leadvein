@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from starlette.middleware.sessions import SessionMiddleware
 
 import app.core.config as config
+import app.campaigns.models  # noqa — register Campaign table BEFORE init_db
 from app.core.db import init_db, User, BuyerAccount
 from app.core.auth import create_user
 from app.seed import seed_all
@@ -46,8 +47,10 @@ deps.set_engine(engine)
 
 
 def _seed_accounts() -> None:
+    from app.campaigns.seed import seed_campaigns
     with Session(engine) as s:
         seed_all(s)
+        seed_campaigns(s)
         creds = config.admin_credentials()
         if creds is not None:
             admin_email, admin_pw = creds

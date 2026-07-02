@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 
 from app.core.db import LeadCategory, CategoryMapping
 
-# generic business taxonomy (label, key) — vertical-AGNOSTIC; admins extend at runtime
+# generic business taxonomy (label, key) — domain-agnostic; admins extend at runtime
 SEED_CATEGORIES = [
     ("Restaurant", "restaurant"), ("Takeaway", "takeaway"), ("Cafe", "cafe"),
     ("Bakery", "bakery"), ("Bar", "bar"), ("Pub", "pub"), ("Hotel", "hotel"),
