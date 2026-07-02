@@ -19,6 +19,8 @@ def register_providers() -> None:
     from app.adapters import registry
     from app.adapters.providers.companies_house import CompaniesHouseAdapter
     from app.adapters.providers.hunter import HunterAdapter
+    from app.adapters.providers.fingerprint_discovery import FingerprintDiscoveryAdapter
 
     registry.register(CompaniesHouseAdapter())
     registry.register(HunterAdapter())
+    registry.register(FingerprintDiscoveryAdapter())
