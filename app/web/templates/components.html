@@ -3,7 +3,7 @@
 {% macro page_intro(title, subtitle=None) %}
 <div class="mb-6">
   <h2 class="text-xl font-semibold tracking-tight text-ink-900">{{ title }}</h2>
-  {% if subtitle %}<p class="mt-1 text-sm text-ink-500 max-w-2xl">{{ subtitle }}</p>{% endif %}
+  {% if subtitle %}<p class="mt-1 text-sm text-ink-500 max-w-2xl">{{ subtitle|safe }}</p>{% endif %}
 </div>
 {% endmacro %}
 
