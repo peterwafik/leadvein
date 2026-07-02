@@ -353,6 +353,16 @@ async def composer_estimate(request: Request, session: Session = Depends(get_ses
             ctx = {"quality_profile": prof}
         except KeyError:
             pass  # Unknown key → baseline only, never 500
+    # Audit campaign.search when estimate is driven by a campaign-derived segment
+    segment_id = body.get("segment_id")
+    if segment_id:
+        try:
+            seg = get_owned(session, int(segment_id), u.buyer_account_id)
+            if seg and seg.origin_key:
+                audit(session, u.id, "campaign.search", "Segment", str(seg.id),
+                      {"origin_key": seg.origin_key})
+        except (ValueError, TypeError):
+            pass
     from app.core.targeting.estimate import estimate as targeting_estimate
     try:
         est = targeting_estimate(session, u.buyer_account_id, composition,
