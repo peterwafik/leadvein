@@ -21,3 +21,33 @@ HOT_VALIDATION = {
 
 def hot_validation_json() -> str:
     return json.dumps(HOT_VALIDATION)
+
+
+PHONE_VALIDATED = {
+    "profile": {"present": True, "validated": True, "tier": "validated"},
+    "email": {"present": True, "validated": False, "tier": "present"},
+    "phone": {"present": True, "validated": True, "tier": "validated"},
+    "address": {"present": True, "validated": True, "tier": "validated"},
+    "website": {"present": True, "validated": True, "tier": "validated"},
+    "freshness": {"present": True, "validated": True, "tier": "validated"},
+}
+
+EMAIL_ONLY_VALIDATED = {
+    "profile": {"present": True, "validated": True, "tier": "validated"},
+    "email": {"present": True, "validated": True, "tier": "validated"},
+    "phone": {"present": True, "validated": False, "tier": "present"},
+    "address": {"present": True, "validated": True, "tier": "validated"},
+    "website": {"present": True, "validated": True, "tier": "validated"},
+    "freshness": {"present": True, "validated": True, "tier": "validated"},
+}
+
+
+def phone_validated_json() -> str:
+    """Profile present + phone tier validated. Clears baseline (phone is a business_contact) AND utilities."""
+    return json.dumps(PHONE_VALIDATED)
+
+
+def email_only_validated_json() -> str:
+    """Profile present + email tier validated, phone tier below validated.
+    Clears baseline (email is a business_contact) but NOT utilities (requires validated phone)."""
+    return json.dumps(EMAIL_ONLY_VALIDATED)

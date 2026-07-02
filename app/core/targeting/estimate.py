@@ -30,13 +30,13 @@ def _fresh_band(d):
     return "<=7" if d <= 7 else "<=30" if d <= 30 else "<=90" if d <= 90 else "older"
 
 
-def estimate(session, buyer_account_id, composition, *, sample: int = 8) -> dict:
+def estimate(session, buyer_account_id, composition, *, sample: int = 8, ctx=None) -> dict:
     leads = matching_by_composition(session, composition)
     visible = [l for l in leads
                if not is_expired(l)
                and not lead_opted_out(session, l)
                and _not_suppressed(session, buyer_account_id, l)
-               and passes_serve_filters(session, buyer_account_id, l)]
+               and passes_serve_filters(session, buyer_account_id, l, ctx)]
     sd = {"0-49": 0, "50-69": 0, "70-84": 0, "85-100": 0}
     fd = {"<=7": 0, "<=30": 0, "<=90": 0, "older": 0}
     for l in visible:

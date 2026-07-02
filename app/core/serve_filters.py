@@ -8,8 +8,8 @@ def register_serve_filter(fn) -> None:
         _FILTERS.append(fn)
 
 
-def passes_serve_filters(session, buyer_account_id, lead) -> bool:
-    return all(fn(session, buyer_account_id, lead) for fn in _FILTERS)
+def passes_serve_filters(session, buyer_account_id, lead, ctx=None) -> bool:
+    return all(fn(session, buyer_account_id, lead, ctx) for fn in _FILTERS)
 
 
 def clear() -> None:
