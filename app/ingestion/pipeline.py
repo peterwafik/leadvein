@@ -10,6 +10,7 @@ from app.core.db import Lead, IngestionJob, _now
 from app.core.retention import expiry_for
 from app.core.dedup import dedupe_key, find_existing
 from app.core.sources import ensure_source
+from app.core.targeting.coverage import recompute_coverage
 from app.enrich.website import enrich_website
 from app.scoring.engine import score
 from app.scoring.profiles import registry as profile_registry
@@ -95,5 +96,6 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
                        status="done", counts_json=json.dumps(counts))
     session.add(job)
     session.commit()
+    recompute_coverage(session)
     audit(session, actor_user_id, "ingest", "IngestionJob", str(job.id), counts)
     return counts

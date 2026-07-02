@@ -218,6 +218,15 @@ class LeadCategoryLink(SQLModel, table=True):
     category_key: str = Field(default="", index=True)
 
 
+class AttributeCoverage(SQLModel, table=True):
+    __tablename__ = "lv_attribute_coverage"
+    id: int | None = Field(default=None, primary_key=True)
+    path: str = Field(default="", index=True)
+    populated: int = 0
+    total: int = 0
+    updated_at: str = Field(default_factory=_now)
+
+
 def init_db(url: str = "sqlite:///leadvault.db"):
     engine = create_engine(url, connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
