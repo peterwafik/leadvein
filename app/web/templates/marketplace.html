@@ -7,7 +7,8 @@
    'Every lead here has cleared the quality gate — a real UK business with a <strong>validated published phone</strong>. Contact details stay masked until you unlock. Sourced from OpenStreetMap (ODbL).') }}
 
 {% set f = filters or {} %}
-{% set suggestions = ['restaurant','cafe','bakery','takeaway','pub','bar','hotel','hair_salon','barber_shop','nail_salon','gym','pharmacy','convenience_store','florist','butcher','dental_clinic'] %}
+{# data-driven: real business types present in inventory (grows as you ingest) #}
+{% set suggestions = cat_options if cat_options else [] %}
 
 <form method="post" action="/app/marketplace/search" id="searchForm"
       class="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
@@ -21,16 +22,20 @@
                class="min-w-[120px] flex-1 border-0 bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-ink-400">
       </div>
       <input type="hidden" name="categories" id="categoriesField" value="{{ (f.categories or [])|join(',') if f.categories else '' }}">
+      {% if suggestions %}
       <div class="mt-2 flex flex-wrap gap-1.5">
         {% for s in suggestions %}
         <button type="button" data-cat="{{ s }}" class="suggestion rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium capitalize text-ink-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">{{ s|replace('_',' ') }}</button>
         {% endfor %}
       </div>
+      {% endif %}
     {% endcall %}
 
-    <!-- City -->
-    {% call ui.field('Area', 'A UK town or city. Coverage is best in Oxford, Norwich and Cambridge.') %}
-      {{ ui.input('city', value=f.city or '', placeholder='e.g. Oxford') }}
+    <!-- City (data-driven: only areas that actually have leads) -->
+    {% call ui.field('Area', 'Suggestions are areas that already have leads (' ~ (cities|length) ~ ' so far) — more appear as inventory is ingested.') %}
+      <input type="text" name="city" value="{{ f.city or '' }}" placeholder="e.g. Oxford" list="cityList" autocomplete="off"
+        class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+      <datalist id="cityList">{% for c in cities %}<option value="{{ c }}"></option>{% endfor %}</datalist>
     {% endcall %}
 
     <!-- Lead quality -->

@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.core.compliance import audit
-from app.core.db import (BuyerAccount, Lead, LeadRecipe, PurchasedLead,
+from app.core.db import (BuyerAccount, Lead, LeadCategoryLink, LeadRecipe, PurchasedLead,
                          SuppressionList, SuppressionEntry, CreditTransaction, _now)
 from app.core.export_leads import export_purchased_csv
 from app.core.marketplace import search, estimate
@@ -54,12 +54,23 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
 
 
 @router.get("/marketplace")
+def _inventory_options(session: Session) -> dict:
+    """Data-driven filter options: the cities and categories that ACTUALLY exist in
+    inventory. Grows automatically as more is ingested — never a hardcoded list."""
+    cities = [c for c in session.exec(
+        select(Lead.city).where(Lead.city != "").distinct()).all() if c]
+    cats = [c for c in session.exec(
+        select(LeadCategoryLink.category_key).distinct()).all() if c]
+    return {"cities": sorted(set(cities)), "cat_options": sorted(set(cats))}
+
+
 def marketplace_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
     return templates.TemplateResponse(request, "marketplace.html", {
-        "request": request, "user": u, "results": None, "csrf": ensure_csrf(request)})
+        "request": request, "user": u, "results": None, "csrf": ensure_csrf(request),
+        **_inventory_options(session)})
 
 
 @router.get("/campaign-preview")
@@ -86,7 +97,7 @@ async def marketplace_search(request: Request, session: Session = Depends(get_se
     return templates.TemplateResponse(request, "marketplace.html", {
         "request": request, "user": u, "results": results, "estimate": est,
         "filters": filters, "credits": balance(session, u.buyer_account_id),
-        "csrf": ensure_csrf(request)})
+        "csrf": ensure_csrf(request), **_inventory_options(session)})
 
 
 @router.post("/unlock/{lead_id}", dependencies=[Depends(csrf_protect)])
