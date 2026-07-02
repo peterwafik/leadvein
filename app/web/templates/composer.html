@@ -174,6 +174,7 @@
       <div id="advConditions" class="px-5 py-4 space-y-3">
         {# Each available predicate gets a condition row #}
         {% for opt in options.available %}
+          {% if opt.key != 'web.runs_tech' %}
           {% if opt.group != ns.prev_group %}
             {% set ns.prev_group = opt.group %}
             <p class="pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400 first:pt-0">{{ opt.group|replace('_',' ')|title }}</p>
@@ -225,6 +226,7 @@
               </div>
             </div>
           </div>
+          {% endif %}
         {% endfor %}
       </div>
 
@@ -238,6 +240,7 @@
         <div class="space-y-2">
           {% set ns2 = namespace(prev_group='') %}
           {% for opt in options.unavailable %}
+            {% if opt.key != 'web.runs_tech' %}
             {% if opt.group != ns2.prev_group %}
               {% set ns2.prev_group = opt.group %}
               <p class="pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-ink-300">{{ opt.group|replace('_',' ')|title }}</p>
@@ -293,7 +296,69 @@
                 </div>
               </div>
             </div>
+            {% endif %}
           {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# ── Technology group — data-driven from tech_recipes ──────────────── #}
+      {% if tech_recipes is defined and tech_recipes %}
+      <div class="border-t border-slate-100 px-5 py-4">
+        <p class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Technology — Runs fingerprinted platform</p>
+
+        {# Hidden adv-condition row: buildComposition() + _loadCompositionPreset read it #}
+        <div class="adv-condition" data-key="web.runs_tech"
+             data-schema='{"recipe_in":"list[string]","min_strength":"int"}'
+             style="display:none" aria-hidden="true">
+          <input type="checkbox" class="adv-enable" data-key="web.runs_tech">
+          <div class="adv-params hidden">
+            <div class="adv-chip-box" data-param="recipe_in">
+              <input class="adv-chip-input" type="text" placeholder="">
+            </div>
+            <input type="hidden" class="adv-param-input adv-chip-value" data-param="recipe_in" value="[]">
+            <input type="number" class="adv-param-input" data-param="min_strength" value="1" min="1" max="5">
+            <input type="checkbox" class="adv-negate">
+          </div>
+        </div>
+
+        {# Visible recipe picker — grouped by category #}
+        {% for cat, cat_recipes in tech_recipes | groupby('category') %}
+        <p class="pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-500">{{ cat | replace('_', ' ') | title }}</p>
+        <div class="flex flex-wrap gap-2 mb-2">
+          {% for recipe in cat_recipes %}
+          {% if recipe.enabled %}
+          <button type="button"
+                  class="tech-recipe-btn rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-ink-700 shadow-sm transition hover:border-brand-400 hover:text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                  data-recipe="{{ recipe.recipe_key }}">
+            {{ recipe.recipe_key | replace('_', ' ') | title }}
+          </button>
+          {% else %}
+          <span class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-ink-400 opacity-60 cursor-not-allowed select-none"
+                title="low-confidence — test before use">
+            {{ recipe.recipe_key | replace('_', ' ') | title }}
+            <span class="text-[11px] ml-1">(test before use)</span>
+          </span>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endfor %}
+
+        {# Min strength + clear #}
+        <div class="mt-3 flex flex-wrap items-center gap-4">
+          <label class="flex items-center gap-2 text-[13px] text-ink-600">
+            Min. match strength
+            <input type="number" id="techMinStrength" min="1" max="5" value="1"
+                   class="w-16 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm shadow-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25">
+          </label>
+          <button type="button" id="techClear"
+                  class="text-[12px] text-ink-500 hover:text-ink-700 hover:underline">Clear selection</button>
+        </div>
+
+        {# Selected display #}
+        <div id="techSelectedDisplay" class="mt-2 hidden">
+          <span class="text-[12px] text-ink-500">Selected: </span>
+          <span id="techSelectedList" class="text-[12px] font-medium text-brand-700"></span>
         </div>
       </div>
       {% endif %}
@@ -1005,6 +1070,7 @@ window._allCities = {{ cities | tojson }};
       p.nodes.forEach(function (node) { if (node && node.predicate) loadAdvancedRow(node); });
       renderCityChips();
       renderGuidedChips();
+      if (typeof window._syncTechUI === 'function') { window._syncTechUI(); }
       setMode('advanced');
     }
     scheduleEstimate();
@@ -1014,6 +1080,83 @@ window._allCities = {{ cities | tojson }};
     const p = window._segmentPreset;  // read-back: _loadCompositionPreset consumes this
     _loadCompositionPreset(p);
   })();
+})();
+</script>
+
+<script>
+/* ── Technology section — recipe picker synced to hidden adv-condition row ── */
+(function () {
+  let techRecipes = [];
+  const techRow = document.querySelector('.adv-condition[data-key="web.runs_tech"]');
+  const techChipValue = techRow ? techRow.querySelector('.adv-chip-value[data-param="recipe_in"]') : null;
+  const techStrengthHidden = techRow ? techRow.querySelector('.adv-param-input[data-param="min_strength"]') : null;
+  const techEnableCb = techRow ? techRow.querySelector('.adv-enable') : null;
+  const techParamsDiv = techRow ? techRow.querySelector('.adv-params') : null;
+
+  function _syncHiddenRow() {
+    if (!techRow) return;
+    const hasAny = techRecipes.length > 0;
+    if (techEnableCb) techEnableCb.checked = hasAny;
+    if (techParamsDiv) techParamsDiv.classList.toggle('hidden', !hasAny);
+    if (techChipValue) techChipValue.value = JSON.stringify(techRecipes);
+    const ms = document.getElementById('techMinStrength');
+    if (techStrengthHidden && ms) techStrengthHidden.value = ms.value || '1';
+    const disp = document.getElementById('techSelectedDisplay');
+    const list = document.getElementById('techSelectedList');
+    if (disp) disp.classList.toggle('hidden', !hasAny);
+    if (list) list.textContent = techRecipes.join(', ');
+  }
+
+  function _syncBtns() {
+    document.querySelectorAll('.tech-recipe-btn').forEach(function (btn) {
+      const sel = techRecipes.indexOf(btn.dataset.recipe) !== -1;
+      btn.classList.toggle('bg-brand-600', sel);
+      btn.classList.toggle('text-white', sel);
+      btn.classList.toggle('border-brand-600', sel);
+    });
+  }
+
+  /* Called by _loadCompositionPreset after it loads web.runs_tech into the hidden row */
+  window._syncTechUI = function () {
+    if (!techChipValue) return;
+    try { techRecipes = JSON.parse(techChipValue.value || '[]'); } catch (e) { techRecipes = []; }
+    const ms = document.getElementById('techMinStrength');
+    if (ms && techStrengthHidden) ms.value = techStrengthHidden.value || '1';
+    _syncBtns();
+  };
+
+  document.querySelectorAll('.tech-recipe-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const r = btn.dataset.recipe;
+      const i = techRecipes.indexOf(r);
+      if (i !== -1) { techRecipes.splice(i, 1); } else { techRecipes.push(r); }
+      _syncHiddenRow();
+      _syncBtns();
+      if (typeof scheduleEstimate === 'function') { scheduleEstimate(); }
+    });
+  });
+
+  const msEl = document.getElementById('techMinStrength');
+  if (msEl) {
+    msEl.addEventListener('input', function () {
+      _syncHiddenRow();
+      if (typeof scheduleEstimate === 'function') { scheduleEstimate(); }
+    });
+    msEl.addEventListener('change', function () {
+      _syncHiddenRow();
+      if (typeof scheduleEstimate === 'function') { scheduleEstimate(); }
+    });
+  }
+
+  const clearBtn = document.getElementById('techClear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function () {
+      techRecipes = [];
+      _syncHiddenRow();
+      _syncBtns();
+      if (typeof scheduleEstimate === 'function') { scheduleEstimate(); }
+    });
+  }
 })();
 </script>
 {% endblock %}

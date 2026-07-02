@@ -239,9 +239,11 @@ def composer_page(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     from app.core.targeting.composer import predicate_options
+    from app.fingerprints import library as fp_library
     ctx: dict = {
         "request": request, "user": u, "csrf": ensure_csrf(request),
         "options": predicate_options(session), "credits": balance(session, u.buyer_account_id),
+        "tech_recipes": fp_library.list_recipes(session),
         **_inventory_options(session),
     }
     segment_id = request.query_params.get("segment")

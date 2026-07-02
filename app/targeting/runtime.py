@@ -10,5 +10,5 @@ def register_targeting_runtime() -> None:
               category.CATEGORY_ANY,
               contactability.HAS_PHONE, contactability.HAS_ROLE_EMAIL,
               contactability.HAS_BUSINESS_CONTACT,
-              webpresence.HAS_SIGNAL, webpresence.IS_ENRICHED):
+              webpresence.HAS_SIGNAL, webpresence.IS_ENRICHED, webpresence.RUNS_TECH):
         registry.register(p)
