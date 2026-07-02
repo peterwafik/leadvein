@@ -15,6 +15,8 @@ from app.core.masking import unlock_view, assert_owned
 from app.core.purchasing import (unlock_lead, balance, InsufficientCredits,
                                  LeadSuppressed, ComplianceNotAcknowledged)
 from app.core.recipes import DEFAULT_FILTERS
+from app.core.targeting.segments import (create_segment, list_segments,
+                                         get_owned, delete_segment)
 from app.web.csrf import ensure_csrf, csrf_protect
 from app.web.deps import templates, get_session, current_user, redirect
 
@@ -225,10 +227,57 @@ def composer_page(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     from app.core.targeting.composer import predicate_options
-    return templates.TemplateResponse(request, "composer.html", {
+    ctx: dict = {
         "request": request, "user": u, "csrf": ensure_csrf(request),
         "options": predicate_options(session), "credits": balance(session, u.buyer_account_id),
-        **_inventory_options(session)})
+        **_inventory_options(session),
+    }
+    segment_id = request.query_params.get("segment")
+    if segment_id:
+        try:
+            seg = get_owned(session, int(segment_id), u.buyer_account_id)
+            if seg:
+                ctx["preset"] = seg.composition_json
+        except (ValueError, TypeError):
+            pass
+    return templates.TemplateResponse(request, "composer.html", ctx)
+
+
+@router.post("/composer/save", dependencies=[Depends(csrf_protect)])
+async def composer_save(request: Request, session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    form = await request.form()
+    name = form.get("name", "").strip() or "Untitled segment"
+    composition_raw = form.get("composition", "{}")
+    try:
+        composition = json.loads(composition_raw)
+    except (json.JSONDecodeError, TypeError):
+        composition = {"op": "AND", "nodes": []}
+    create_segment(session, u.buyer_account_id, name, composition)
+    return redirect("/app/segments")
+
+
+@router.get("/segments")
+def segments_page(request: Request, session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    segs = list_segments(session, u.buyer_account_id)
+    return templates.TemplateResponse(request, "segments.html", {
+        "request": request, "user": u, "segments": segs,
+        "csrf": ensure_csrf(request)})
+
+
+@router.post("/segments/{segment_id}/delete", dependencies=[Depends(csrf_protect)])
+def segment_delete(request: Request, segment_id: int,
+                   session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    delete_segment(session, segment_id, u.buyer_account_id)
+    return redirect("/app/segments")
 
 
 @router.post("/composer/estimate")

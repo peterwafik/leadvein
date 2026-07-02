@@ -244,6 +244,13 @@
 </div>
 
 <script>
+{% if preset is defined and preset %}
+window._segmentPreset = {{ preset | safe }};
+{% else %}
+window._segmentPreset = null;
+{% endif %}
+</script>
+<script>
 (function () {
   /* ── State ────────────────────────────────────────────────────────────── */
   let mode = 'guided';
