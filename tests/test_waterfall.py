@@ -119,6 +119,32 @@ class FakeOverBudgetAdapter:
         return []
 
 
+class FakeNoFillAdapter:
+    """Makes a provider call (sets api_calls_last=1) but returns no fills.
+
+    Used to test FIX 1: budget must count API *calls*, not fills.
+    Even when an adapter returns [] the invocation must still be metered.
+    """
+    meta = SourceMeta(
+        key="fake_no_fill",
+        name="Fake No Fill",
+        type="enrichment",
+        url="https://example.com",
+        license="CC0",
+        terms_status="permitted",
+        key_env="",
+        free_tier={"cap": 1, "window": "month"},
+    )
+
+    def __init__(self):
+        self.call_count = 0
+
+    def enrich(self, view: dict) -> list[FieldContribution]:
+        self.call_count += 1
+        self.api_calls_last = 1  # simulates hitting the provider
+        return []
+
+
 # ---------------------------------------------------------------------------
 # (a) Over-budget adapter is skipped
 # ---------------------------------------------------------------------------
@@ -172,6 +198,54 @@ def test_fills_missing_email_and_stamps_provenance(session):
     # Budget was decremented
     cap = adapter.meta.free_tier["cap"]
     assert remaining(session, "fake_email_src", cap=cap) == cap - 1
+
+
+# ---------------------------------------------------------------------------
+# (d) No-fill adapter still records use (FIX 1: count calls not fills)
+# ---------------------------------------------------------------------------
+
+def test_no_fill_adapter_still_records_use(session):
+    """An adapter that makes a provider call but yields no fills STILL records 1 use.
+
+    This is the core fix: Hunter returning only personal emails (discarded → [])
+    consumed a real API call, so budget must advance even when fill_count == 0.
+    """
+    from app.adapters.waterfall import run_enrichment
+    from app.adapters.budget import remaining
+
+    adapter = FakeNoFillAdapter()
+    lead = _make_lead(session)
+
+    result = run_enrichment(session, lead, [adapter])
+
+    # enrich() was called
+    assert adapter.call_count == 1
+    # No fills — fill count is 0
+    assert result.get("fake_no_fill", -1) == 0
+    # Budget was consumed: cap=1, used=1 → remaining=0
+    cap = adapter.meta.free_tier["cap"]
+    assert remaining(session, "fake_no_fill", cap=cap) == 0
+
+
+def test_budget_exhausted_by_no_fill_skips_next_invocation(session):
+    """After a no-fill call exhausts cap=1, the next invocation is skipped.
+
+    Proves the free-tier is actually bounded even when adapters make calls
+    that return no usable data.
+    """
+    from app.adapters.waterfall import run_enrichment
+
+    adapter = FakeNoFillAdapter()
+    lead1 = _make_lead(session)
+    lead2 = _make_lead(session)
+
+    # First call: enrich() is invoked and consumes the only budget slot
+    run_enrichment(session, lead1, [adapter])
+    assert adapter.call_count == 1
+
+    # Second call: cap=1 is exhausted → would_exceed → enrich() NOT called
+    run_enrichment(session, lead2, [adapter])
+    assert adapter.call_count == 1  # still 1, not called again
 
 
 # ---------------------------------------------------------------------------

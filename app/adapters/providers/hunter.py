@@ -57,7 +57,12 @@ class HunterAdapter:
         - No website_url / unparseable domain  → []
         - Lead already has a role-based public_email → [] (no-op)
         - Hunter returns only personal emails       → [] (discarded)
+
+        Sets ``self.api_calls_last`` to 1 immediately before the HTTP request
+        and to 0 at the top so no-HTTP short-circuits report 0 (no call made).
         """
+        self.api_calls_last = 0  # reset; short-circuits below leave it 0
+
         # Guard: already has a role email
         existing = view.get("public_email") or ""
         if existing and _local(existing) in ROLE_PREFIXES:
@@ -68,6 +73,7 @@ class HunterAdapter:
         if not domain:
             return []
 
+        self.api_calls_last = 1  # about to hit the provider
         # Call Hunter domain-search (mocked in tests)
         resp = self._http.get(
             f"{_API_BASE}/domain-search",

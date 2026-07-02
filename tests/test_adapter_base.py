@@ -32,3 +32,20 @@ def test_adapter_protocol_and_registry():
     assert leads[0].business_name == "Joe Diner"
     assert leads[0].category_keys == ["restaurant"]
     assert leads[0].source_license == "TEST"
+
+
+def test_register_providers_appears_in_list_status_disabled(monkeypatch):
+    """register_providers() adds companies_house + hunter; both disabled without env keys."""
+    from app.adapters.providers import register_providers
+
+    # Ensure provider env keys are absent so both adapters report enabled=False
+    monkeypatch.delenv("LEADVAULT_COMPANIES_HOUSE_KEY", raising=False)
+    monkeypatch.delenv("LEADVAULT_HUNTER_KEY", raising=False)
+
+    register_providers()
+
+    statuses = {s["key"]: s for s in registry.list_status()}
+    assert "companies_house" in statuses, "companies_house not found in registry"
+    assert "hunter" in statuses, "hunter not found in registry"
+    assert statuses["companies_house"]["enabled"] is False
+    assert statuses["hunter"]["enabled"] is False

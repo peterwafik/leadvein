@@ -5,13 +5,15 @@ For each adapter in order:
   2. Skip if ToS-restricted (terms_status == "restricted").
   3. Skip if free-tier cap would be exceeded (cap=0 means unlimited/free-unmetered).
   4. Call adapter.enrich(lead_view(lead)).
-  5. For each FieldContribution: apply only if the field is missing or unverified
+  5. Record one budget use per adapter INVOCATION (not per fill).
+     cap=0 means unlimited/unmetered (e.g. Companies House) — no metering.
+  6. For each FieldContribution: apply only if the field is missing or unverified
      (empty, or its validation tier is below "validated").
      When applied: set the field, re-validate it into validation_json,
-     stamp_provenance, and record_use.
-  6. Commit the lead.
+     stamp_provenance.
+  7. Commit the lead.
 
-Returns {source_key: fill_count} for each adapter that was attempted.
+Returns {source_key: fill_count} for each adapter that was not skipped.
 """
 from __future__ import annotations
 
@@ -131,14 +133,24 @@ def run_enrichment(
 
         # 4. Enrich
         view = lead_view(lead)
-        contributions = adapter.enrich(view)
+        contribs = adapter.enrich(view)
+
+        # 5. Record one budget use per adapter INVOCATION that hit the provider.
+        #    DEFAULT 1 — conservative: if an adapter does not set api_calls_last,
+        #    assume it made a call so we never undercount and overrun the free tier.
+        #    cap=0 means unlimited/unmetered (e.g. Companies House) — skip metering.
+        #    NOTE: this read-modify-write is non-atomic; fine for single-worker.
+        #    A multi-worker deployment would need an atomic SQL UPDATE (used=used+n).
+        calls = getattr(adapter, "api_calls_last", 1)
+        if calls > 0 and cap > 0:
+            record_use(session, source_key, cap, calls)
 
         fill_count = 0
-        for contrib in contributions:
+        for contrib in contribs:
             field = contrib.field
             current_value = getattr(lead, field, None)
 
-            # 5. Apply only if missing or unverified
+            # 6. Apply only if missing or unverified
             is_missing = not current_value
             current_tier = _field_tier(lead, field)
             is_unverified = _is_below_validated(current_tier)
@@ -152,9 +164,8 @@ def run_enrichment(
             # Re-validate this field (offline)
             _revalidate_field(lead, field, contrib.value)
 
-            # Stamp provenance + record budget use
+            # Stamp provenance (budget already counted above — once per invocation)
             stamp_provenance(lead, field, meta.name, contrib.license)
-            record_use(session, source_key, cap, 1)  # commits internally
 
             fill_count += 1
 

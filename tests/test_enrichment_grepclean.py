@@ -17,14 +17,14 @@ def test_core_is_enrichment_provider_grep_clean():
     """Assert that no provider-layer strings from the enrichment pipeline leak
     into app/core.
 
-    Pattern mirrors the brief's grep gate:
+    Pattern mirrors the brief's grep gate (requirement 6):
         hunter|apollo|companies|foursquare|people.?data|linkedin
-        |google.?places|yelp|tcpa|dnc
+        |google.?places|yelp|tcpa|dnc|provider.?key
     """
     root = pathlib.Path("app/core")
     pat = re.compile(
         r"hunter|apollo|companies|foursquare|people.?data|linkedin"
-        r"|google.?places|yelp|tcpa|dnc",
+        r"|google.?places|yelp|tcpa|dnc|provider.?key",
         re.I,
     )
     hits: list[str] = []

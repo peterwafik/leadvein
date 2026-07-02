@@ -83,6 +83,9 @@ register_quality_runtime()
 from app.compliance.outreach_gate import register_outreach_gate
 register_outreach_gate()
 
+from app.adapters.providers import register_providers
+register_providers()
+
 
 @app.get("/")
 def root():
