@@ -74,11 +74,14 @@ def _seed_accounts() -> None:
 
 _seed_accounts()
 
+from app.web.routes_geo import router as geo_router
+
 app.include_router(auth_router)
 app.include_router(buyer_router)
 app.include_router(admin_router)
 app.include_router(billing_router)
 app.include_router(public_router)
+app.include_router(geo_router)
 
 from app.targeting.runtime import register_targeting_runtime
 register_targeting_runtime()

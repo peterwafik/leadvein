@@ -4,6 +4,33 @@
 {% block body %}
 {{ ui.page_intro('Run ingestion', 'Fetch leads from a source adapter and store them in the inventory. Duplicates and compliance-blocked records are skipped automatically.') }}
 
+{% if open_requests %}
+{% call ui.card('p-5 mb-6') %}
+  <h3 class="text-sm font-semibold text-ink-900 mb-3">Requested areas
+    <span class="ml-2">{{ ui.badge(open_requests|length ~ ' open', 'amber') }}</span></h3>
+  <table class="w-full text-sm">
+    <thead><tr class="text-left text-[11px] uppercase tracking-wider text-ink-400">
+      <th class="pb-2">Area</th><th class="pb-2">Country</th><th class="pb-2">Requested</th><th></th></tr></thead>
+    <tbody>
+    {% for r in open_requests %}
+      <tr class="border-t border-slate-100">
+        <td class="py-2 font-medium">{{ r.area }}</td>
+        <td class="py-2">{{ r.country }}</td>
+        <td class="py-2 text-ink-500">{{ r.created_at[:10] }}</td>
+        <td class="py-2 text-right">
+          <form method="post" action="/admin/ingest-request/{{ r.id }}/close" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            {{ ui.btn('Mark done', kind='secondary', type='submit') }}
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="mt-2 text-[12.5px] text-ink-500">Run an ingest for a requested area below, then mark it done. Buyers see it as available once leads land.</p>
+{% endcall %}
+{% endif %}
+
 {% call ui.card(extra='p-5 mb-6') %}
 <form method="post" action="/admin/ingest" class="grid gap-4 sm:grid-cols-2">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
