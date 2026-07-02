@@ -38,14 +38,31 @@ def test_seed_idempotent():
 # ---------------------------------------------------------------------------
 
 def test_list_recipes_enabled_includes_high_confidence():
-    """list_recipes(enabled=True) includes gloriafood, chownow, shopify."""
+    """list_recipes(enabled=True) includes gloriafood and shopify (high-confidence set)."""
     with _fresh_session() as s:
         seed_recipes(s)
         enabled = list_recipes(s, enabled=True)
         keys = {r.recipe_key for r in enabled}
         assert "gloriafood" in keys, f"gloriafood missing from enabled set; got {keys}"
-        assert "chownow" in keys, f"chownow missing from enabled set; got {keys}"
         assert "shopify" in keys, f"shopify missing from enabled set; got {keys}"
+        # FIX 2: chownow is GREYED (moved from high-confidence to grey tier)
+        assert "chownow" not in keys, (
+            f"chownow must NOT be in the enabled set (greyed — bare-vendor token); got {keys}"
+        )
+
+
+def test_chownow_is_greyed():
+    """FIX 2: chownow must be greyed (enabled=False, confidence='medium')."""
+    with _fresh_session() as s:
+        seed_recipes(s)
+        r = get_recipe(s, "chownow")
+        assert r is not None, "chownow recipe not found in DB"
+        assert r.enabled is False, (
+            f"chownow must be greyed (enabled=False); got enabled={r.enabled!r}"
+        )
+        assert r.confidence == "medium", (
+            f"chownow must have confidence='medium'; got {r.confidence!r}"
+        )
 
 
 # ---------------------------------------------------------------------------

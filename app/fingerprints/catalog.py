@@ -8,6 +8,11 @@ Two tiers:
                    reliable discovery signal; safe to run in production.
   GREYED           (enabled=False, confidence="low"):  generic / self-hosted /
                    separate-domain tokens; seed but DO NOT use until tested.
+
+INV-12 compliance: every HIGH-CONFIDENCE recipe uses ONLY distinctive asset-domain
+tokens (e.g. CDN subdomain, embed subdomain) that appear when the technology is
+actually LOADED on the page — NOT bare vendor-name strings that would match a mere
+textual mention or an outbound link.
 """
 from __future__ import annotations
 
@@ -24,8 +29,9 @@ def _j(v) -> str:
 # ---------------------------------------------------------------------------
 #
 # gloriafood fields are VERBATIM from app/engine/recipes.py BUILTIN_RECIPES.
-# All other high-confidence recipes use dedicated asset-domain tokens
-# (a different CDN/asset host per vendor) that are not found on generic sites.
+# All other high-confidence recipes use ONLY distinctive asset-domain tokens
+# (a different CDN/asset host per vendor) that appear only when the technology
+# is actively loaded — NOT bare vendor-name strings (INV-12).
 
 _HIGH: list[dict] = [
     # ------------------------------------------------------------------ Online Ordering / Restaurants
@@ -35,6 +41,9 @@ _HIGH: list[dict] = [
         "tech_type": "GloriaFood",
         "urlscan_query": "domain:fbgcdn.com",
         "publicwww_query": '"fbgcdn.com/embedder"',
+        # gloriafood kept verbatim from BUILTIN_RECIPES (fbgcdn.com CDN, ewm2.js script,
+        # data-glf-* attributes are all distinctive — "gloriafood" is embedded in the
+        # fbgcdn.com domain itself).
         "verify_fingerprints_json": _j(["fbgcdn.com", "ewm2.js", "data-glf-cuid",
                                         "data-glf-ruid", "gloriafood"]),
         "id_extractors_json": _j({
@@ -43,16 +52,6 @@ _HIGH: list[dict] = [
         }),
         "exclude_hosts_json": _j(["gloriafood", "fbgcdn", "foodbooking"]),
     },
-    {
-        "recipe_key": "chownow",
-        "category": "Online Ordering / Restaurants",
-        "tech_type": "ChowNow",
-        "urlscan_query": "domain:chownow.com",
-        "publicwww_query": '"chownow.com"',
-        "verify_fingerprints_json": _j(["chownow.com", "chownow"]),
-        "id_extractors_json": _j({}),
-        "exclude_hosts_json": _j(["chownow"]),
-    },
     # ------------------------------------------------------------------ E-commerce
     {
         "recipe_key": "shopify",
@@ -60,7 +59,8 @@ _HIGH: list[dict] = [
         "tech_type": "Shopify",
         "urlscan_query": "domain:cdn.shopify.com",
         "publicwww_query": '"cdn.shopify.com"',
-        "verify_fingerprints_json": _j(["cdn.shopify.com", "shopify"]),
+        # bare "shopify" removed — cdn.shopify.com is the distinctive embed CDN
+        "verify_fingerprints_json": _j(["cdn.shopify.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["shopify"]),
     },
@@ -70,7 +70,8 @@ _HIGH: list[dict] = [
         "tech_type": "BigCommerce",
         "urlscan_query": "domain:bigcommerce.com",
         "publicwww_query": '"bigcommerce.com"',
-        "verify_fingerprints_json": _j(["bigcommerce.com", "bigcommerce"]),
+        # bare "bigcommerce" removed — bigcommerce.com asset domain is the signal
+        "verify_fingerprints_json": _j(["bigcommerce.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["bigcommerce"]),
     },
@@ -81,7 +82,9 @@ _HIGH: list[dict] = [
         "tech_type": "Wix",
         "urlscan_query": "domain:wixstatic.com",
         "publicwww_query": '"wixstatic.com"',
-        "verify_fingerprints_json": _j(["wixstatic.com", "wix.com", "_wix"]),
+        # "wix.com" removed (mere link); wixstatic.com is the CDN; _wix is a
+        # distinctive data-attribute prefix present on embedded Wix elements
+        "verify_fingerprints_json": _j(["wixstatic.com", "_wix"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["wix.com", "wixsite.com"]),
     },
@@ -91,7 +94,8 @@ _HIGH: list[dict] = [
         "tech_type": "Squarespace",
         "urlscan_query": "domain:static1.squarespace.com",
         "publicwww_query": '"static1.squarespace.com"',
-        "verify_fingerprints_json": _j(["static1.squarespace.com", "squarespace"]),
+        # bare "squarespace" removed — static1.squarespace.com is the CDN
+        "verify_fingerprints_json": _j(["static1.squarespace.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["squarespace.com"]),
     },
@@ -101,7 +105,9 @@ _HIGH: list[dict] = [
         "tech_type": "Webflow",
         "urlscan_query": "domain:cdn.prod.website-files.com",
         "publicwww_query": '"cdn.prod.website-files.com"',
-        "verify_fingerprints_json": _j(["cdn.prod.website-files.com", "website-files.com", "webflow"]),
+        # bare "webflow" removed; cdn.prod.website-files.com and website-files.com
+        # are distinctive asset-domain tokens
+        "verify_fingerprints_json": _j(["cdn.prod.website-files.com", "website-files.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["webflow.com", "webflow.io"]),
     },
@@ -111,7 +117,9 @@ _HIGH: list[dict] = [
         "tech_type": "Duda",
         "urlscan_query": "domain:irp.cdn-website.com",
         "publicwww_query": '"irp.cdn-website.com"',
-        "verify_fingerprints_json": _j(["irp.cdn-website.com", "cdn-website.com", "duda"]),
+        # bare "duda" removed; irp.cdn-website.com and cdn-website.com are
+        # distinctive asset-domain tokens
+        "verify_fingerprints_json": _j(["irp.cdn-website.com", "cdn-website.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["duda.co", "dudamobile.com"]),
     },
@@ -122,7 +130,9 @@ _HIGH: list[dict] = [
         "tech_type": "Calendly",
         "urlscan_query": "domain:assets.calendly.com",
         "publicwww_query": '"assets.calendly.com"',
-        "verify_fingerprints_json": _j(["assets.calendly.com", "calendly.com", "calendly"]),
+        # "calendly.com" and bare "calendly" removed — assets.calendly.com is
+        # the distinctive embed asset domain
+        "verify_fingerprints_json": _j(["assets.calendly.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["calendly.com"]),
     },
@@ -133,7 +143,8 @@ _HIGH: list[dict] = [
         "tech_type": "Intercom",
         "urlscan_query": "domain:widget.intercom.io",
         "publicwww_query": '"widget.intercom.io"',
-        "verify_fingerprints_json": _j(["widget.intercom.io", "intercom"]),
+        # bare "intercom" removed — widget.intercom.io is the distinctive embed domain
+        "verify_fingerprints_json": _j(["widget.intercom.io"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["intercom.com", "intercom.io"]),
     },
@@ -143,7 +154,9 @@ _HIGH: list[dict] = [
         "tech_type": "Zendesk Chat",
         "urlscan_query": "domain:static.zdassets.com",
         "publicwww_query": '"static.zdassets.com"',
-        "verify_fingerprints_json": _j(["static.zdassets.com", "zdassets", "zendesk"]),
+        # bare "zendesk" removed; static.zdassets.com and "zdassets" are distinctive
+        # (zdassets is the CDN domain abbreviation unique to Zendesk)
+        "verify_fingerprints_json": _j(["static.zdassets.com", "zdassets"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["zendesk.com"]),
     },
@@ -153,7 +166,8 @@ _HIGH: list[dict] = [
         "tech_type": "Tawk.to",
         "urlscan_query": "domain:embed.tawk.to",
         "publicwww_query": '"embed.tawk.to"',
-        "verify_fingerprints_json": _j(["embed.tawk.to", "tawk.to"]),
+        # "tawk.to" removed (mere link); embed.tawk.to is the distinctive embed subdomain
+        "verify_fingerprints_json": _j(["embed.tawk.to"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["tawk.to"]),
     },
@@ -163,7 +177,9 @@ _HIGH: list[dict] = [
         "tech_type": "Crisp",
         "urlscan_query": "domain:client.crisp.chat",
         "publicwww_query": '"client.crisp.chat"',
-        "verify_fingerprints_json": _j(["client.crisp.chat", "crisp.chat"]),
+        # "crisp.chat" removed (mere link/mention); client.crisp.chat is the
+        # distinctive embed subdomain
+        "verify_fingerprints_json": _j(["client.crisp.chat"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["crisp.chat"]),
     },
@@ -173,7 +189,9 @@ _HIGH: list[dict] = [
         "tech_type": "Drift",
         "urlscan_query": "domain:js.driftt.com",
         "publicwww_query": '"js.driftt.com"',
-        "verify_fingerprints_json": _j(["js.driftt.com", "drift.com", "driftt"]),
+        # "drift.com" removed (mere link); js.driftt.com and "driftt" are distinctive
+        # (driftt is Drift's CDN subdomain abbreviation)
+        "verify_fingerprints_json": _j(["js.driftt.com", "driftt"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["drift.com", "driftt.com"]),
     },
@@ -183,7 +201,8 @@ _HIGH: list[dict] = [
         "tech_type": "Freshchat",
         "urlscan_query": "domain:wchat.freshchat.com",
         "publicwww_query": '"wchat.freshchat.com"',
-        "verify_fingerprints_json": _j(["wchat.freshchat.com", "freshchat"]),
+        # bare "freshchat" removed — wchat.freshchat.com is the distinctive embed domain
+        "verify_fingerprints_json": _j(["wchat.freshchat.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["freshchat.com", "freshworks.com"]),
     },
@@ -193,7 +212,8 @@ _HIGH: list[dict] = [
         "tech_type": "LiveChat",
         "urlscan_query": "domain:cdn.livechatinc.com",
         "publicwww_query": '"cdn.livechatinc.com"',
-        "verify_fingerprints_json": _j(["cdn.livechatinc.com", "livechatinc", "livechat"]),
+        # bare "livechat" removed; cdn.livechatinc.com and "livechatinc" are distinctive
+        "verify_fingerprints_json": _j(["cdn.livechatinc.com", "livechatinc"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["livechat.com", "livechatinc.com"]),
     },
@@ -204,7 +224,8 @@ _HIGH: list[dict] = [
         "tech_type": "Klaviyo",
         "urlscan_query": "domain:static.klaviyo.com",
         "publicwww_query": '"static.klaviyo.com"',
-        "verify_fingerprints_json": _j(["static.klaviyo.com", "klaviyo"]),
+        # bare "klaviyo" removed — static.klaviyo.com is the distinctive CDN
+        "verify_fingerprints_json": _j(["static.klaviyo.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["klaviyo.com"]),
     },
@@ -214,7 +235,8 @@ _HIGH: list[dict] = [
         "tech_type": "HubSpot",
         "urlscan_query": "domain:js.hs-scripts.com",
         "publicwww_query": '"js.hs-scripts.com"',
-        "verify_fingerprints_json": _j(["js.hs-scripts.com", "hs-scripts", "hubspot"]),
+        # bare "hubspot" removed; js.hs-scripts.com and "hs-scripts" are distinctive
+        "verify_fingerprints_json": _j(["js.hs-scripts.com", "hs-scripts"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["hubspot.com"]),
     },
@@ -224,7 +246,8 @@ _HIGH: list[dict] = [
         "tech_type": "Marketo",
         "urlscan_query": "domain:munchkin.marketo.net",
         "publicwww_query": '"munchkin.marketo.net"',
-        "verify_fingerprints_json": _j(["munchkin.marketo.net", "marketo"]),
+        # bare "marketo" removed — munchkin.marketo.net is the distinctive JS host
+        "verify_fingerprints_json": _j(["munchkin.marketo.net"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["marketo.com"]),
     },
@@ -235,7 +258,8 @@ _HIGH: list[dict] = [
         "tech_type": "Hotjar",
         "urlscan_query": "domain:static.hotjar.com",
         "publicwww_query": '"static.hotjar.com"',
-        "verify_fingerprints_json": _j(["static.hotjar.com", "hotjar"]),
+        # bare "hotjar" removed — static.hotjar.com is the distinctive CDN
+        "verify_fingerprints_json": _j(["static.hotjar.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["hotjar.com"]),
     },
@@ -245,7 +269,8 @@ _HIGH: list[dict] = [
         "tech_type": "Segment",
         "urlscan_query": "domain:cdn.segment.com",
         "publicwww_query": '"cdn.segment.com"',
-        "verify_fingerprints_json": _j(["cdn.segment.com", "segment"]),
+        # bare "segment" removed — cdn.segment.com is the distinctive CDN
+        "verify_fingerprints_json": _j(["cdn.segment.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["segment.com"]),
     },
@@ -256,7 +281,8 @@ _HIGH: list[dict] = [
         "tech_type": "Trustpilot",
         "urlscan_query": "domain:widget.trustpilot.com",
         "publicwww_query": '"widget.trustpilot.com"',
-        "verify_fingerprints_json": _j(["widget.trustpilot.com", "trustpilot"]),
+        # bare "trustpilot" removed — widget.trustpilot.com is the distinctive embed domain
+        "verify_fingerprints_json": _j(["widget.trustpilot.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["trustpilot.com"]),
     },
@@ -266,7 +292,8 @@ _HIGH: list[dict] = [
         "tech_type": "Yotpo",
         "urlscan_query": "domain:staticw2.yotpo.com",
         "publicwww_query": '"yotpo.com"',
-        "verify_fingerprints_json": _j(["staticw2.yotpo.com", "yotpo"]),
+        # bare "yotpo" removed — staticw2.yotpo.com is the distinctive CDN
+        "verify_fingerprints_json": _j(["staticw2.yotpo.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["yotpo.com"]),
     },
@@ -277,7 +304,8 @@ _HIGH: list[dict] = [
         "tech_type": "Typeform",
         "urlscan_query": "domain:embed.typeform.com",
         "publicwww_query": '"embed.typeform.com"',
-        "verify_fingerprints_json": _j(["embed.typeform.com", "typeform"]),
+        # bare "typeform" removed — embed.typeform.com is the distinctive embed domain
+        "verify_fingerprints_json": _j(["embed.typeform.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["typeform.com"]),
     },
@@ -287,7 +315,8 @@ _HIGH: list[dict] = [
         "tech_type": "Jotform",
         "urlscan_query": "domain:form.jotform.com",
         "publicwww_query": '"jotform.com"',
-        "verify_fingerprints_json": _j(["form.jotform.com", "jotform"]),
+        # bare "jotform" removed — form.jotform.com is the distinctive embed domain
+        "verify_fingerprints_json": _j(["form.jotform.com"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["jotform.com"]),
     },
@@ -298,14 +327,15 @@ _HIGH: list[dict] = [
         "tech_type": "Klarna",
         "urlscan_query": "domain:x.klarnacdn.net",
         "publicwww_query": '"klarnacdn.net"',
-        "verify_fingerprints_json": _j(["x.klarnacdn.net", "klarna"]),
+        # bare "klarna" removed — x.klarnacdn.net is the distinctive CDN
+        "verify_fingerprints_json": _j(["x.klarnacdn.net"]),
         "id_extractors_json": _j({}),
         "exclude_hosts_json": _j(["klarna.com"]),
     },
 ]
 
 # ---------------------------------------------------------------------------
-# GREYED recipes  (enabled=False, confidence="low")
+# GREYED recipes  (enabled=False, confidence="low" unless overridden)
 #
 # Each entry below uses a generic, self-hosted, or separate-domain token.
 # DO NOT enable in production without verifying the signal is sufficiently
@@ -313,6 +343,21 @@ _HIGH: list[dict] = [
 # ---------------------------------------------------------------------------
 
 _GREYED: list[dict] = [
+    # chownow — bare-vendor token (chownow.com / "chownow") would match any page
+    # that merely LINKS to ChowNow or mentions it (e.g. food-ordering aggregators).
+    # confidence="medium" because the urlscan signal is reasonable; the verify_fingerprint
+    # token is too coarse.  Run a Test-recipe before enabling.
+    {
+        "recipe_key": "chownow",
+        "category": "Online Ordering / Restaurants",
+        "tech_type": "ChowNow",
+        "urlscan_query": "domain:chownow.com",
+        "publicwww_query": '"chownow.com"',
+        "verify_fingerprints_json": _j(["chownow.com", "chownow"]),
+        "id_extractors_json": _j({}),
+        "exclude_hosts_json": _j(["chownow"]),
+        "confidence": "medium",   # overrides "low" from _GREY_DEFAULTS
+    },
     # wordpress — self-hosted; wp-content path is ubiquitous across millions of
     # unrelated sites.  Token is not specific to any lead segment.  Test before use.
     {

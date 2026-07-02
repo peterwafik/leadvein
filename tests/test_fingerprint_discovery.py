@@ -219,10 +219,17 @@ class TestDiscover:
                 adapter.discover(query, session=session, discover_fn=fake_discover)
             )
 
-        # At minimum "gloriafood" and "chownow" are enabled in this category
-        assert "gloriafood" in seen_recipe_keys
-        assert "chownow" in seen_recipe_keys
-        assert len(results) >= 2
+        # "gloriafood" is enabled in this category; chownow is GREYED (FIX 2) so
+        # it must NOT appear in the enabled set.
+        assert "gloriafood" in seen_recipe_keys, (
+            f"gloriafood must be in enabled set; got {seen_recipe_keys}"
+        )
+        # FIX 2: chownow greyed — discover must NOT call discover_fn for it
+        assert "chownow" not in seen_recipe_keys, (
+            "chownow is greyed and must not be discovered; "
+            f"found in seen_recipe_keys: {seen_recipe_keys}"
+        )
+        assert len(results) >= 1
         # Each result carries the right recipe_key
         for r in results:
             assert "host" in r and "recipe_key" in r

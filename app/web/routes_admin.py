@@ -30,6 +30,19 @@ def _enrich_for_admin(lead):  # indirection so tests can stub out live website e
     return enrich_website(lead)
 
 
+def _generic_ingest_keys() -> list[str]:
+    """Return adapter keys compatible with the generic OSM-style ingest() runner.
+
+    FIX 1a: fingerprint_discovery adapters require a ``session`` keyword on
+    discover()/normalize() and use ingest_normalized (not ingest).  They MUST
+    NOT be surfaced in the generic ingest dropdown or executed by ingest_run.
+    """
+    return [
+        k for k in adapter_registry.all_keys()
+        if adapter_registry.get(k).meta.type != "fingerprint_discovery"
+    ]
+
+
 @router.get("")
 def overview(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
@@ -70,8 +83,9 @@ def ingest_page(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
     if not u:
         return redirect("/login")
+    # FIX 1a: only show adapters compatible with the generic ingest() runner
     return templates.TemplateResponse(request, "admin_ingest.html", {
-        "request": request, "user": u, "adapters": adapter_registry.all_keys(),
+        "request": request, "user": u, "adapters": _generic_ingest_keys(),
         "result": None, "csrf": ensure_csrf(request)})
 
 
@@ -83,6 +97,21 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
     u = _admin(request, session)
     if not u:
         return redirect("/login")
+
+    # FIX 1a: reject fingerprint_discovery adapters from the generic runner;
+    # they require session-injected discover/normalize (incompatible with ingest()).
+    if adapter_key not in _generic_ingest_keys():
+        return templates.TemplateResponse(request, "admin_ingest.html", {
+            "request": request, "user": u,
+            "adapters": _generic_ingest_keys(),
+            "result": None,
+            "error": (
+                f"Adapter '{adapter_key}' is not compatible with the generic ingest "
+                "runner. Use the dedicated recipe run route instead."
+            ),
+            "csrf": ensure_csrf(request),
+        })
+
     cats = [c.strip() for c in categories.split(",") if c.strip()]
     adapter = adapter_registry.get(adapter_key)
     counts = ingest(session, adapter,
@@ -90,7 +119,7 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
                     scoring_profile_key=scoring_profile_key,
                     enrich_fn=_enrich_for_admin, actor_user_id=u.id)
     return templates.TemplateResponse(request, "admin_ingest.html", {
-        "request": request, "user": u, "adapters": adapter_registry.all_keys(),
+        "request": request, "user": u, "adapters": _generic_ingest_keys(),
         "result": counts, "csrf": ensure_csrf(request)})
 
 
@@ -206,7 +235,7 @@ def audit_page(request: Request, session: Session = Depends(get_session)):
 
 
 # ---------------------------------------------------------------------------
-# Fingerprint recipes — test + promote
+# Fingerprint recipes — test + promote + run
 # ---------------------------------------------------------------------------
 
 def _recipes_by_category(session: Session) -> dict:
@@ -219,6 +248,59 @@ def _recipes_by_category(session: Session) -> dict:
     return by_cat
 
 
+def _run_recipe_for_admin(
+    session: Session,
+    recipe_key: str,
+    *,
+    limit: int = 25,
+    discover_fn=None,
+    fetch_fn=None,
+    actor_user_id=None,
+) -> dict:
+    """Run discovery for an ENABLED recipe and ingest via ingest_normalized.
+
+    FIX 1b: testable helper (discover_fn / fetch_fn injectable) called by the
+    ``POST /admin/recipes/{recipe_key}/run`` route.  Uses ingest_normalized (not
+    the generic ingest()) so the fingerprint adapter's session-aware discover
+    and normalize are invoked correctly.
+
+    Returns a counts dict on success, or ``{"error": "..."}`` on failure.
+    """
+    from app.fingerprints.library import get_recipe as _get_recipe
+    from app.adapters.providers.fingerprint_discovery import FingerprintDiscoveryAdapter
+    from app.ingestion.pipeline import ingest_normalized
+
+    row = _get_recipe(session, recipe_key)
+    if row is None or not row.enabled:
+        return {"error": f"Recipe {recipe_key!r} is not enabled or not found"}
+
+    adapter = FingerprintDiscoveryAdapter()
+    query = AdapterQuery(
+        area={}, categories=[], limit=limit,
+        extra={"recipe_key": recipe_key},
+    )
+
+    normalized = [
+        adapter.normalize(raw, session=session, fetch_fn=fetch_fn)
+        for raw in adapter.discover(query, session=session, discover_fn=discover_fn)
+    ]
+
+    source_license = (
+        f"Detected from public page source via urlscan.io index (recipe: {row.tech_type})"
+    )
+    counts = ingest_normalized(
+        session, normalized,
+        source_key="fingerprint",
+        source_license=source_license,
+        source_name=adapter.meta.name,
+        source_url=adapter.meta.url,
+        attribution=adapter.attribution(),
+    )
+    audit(session, actor_user_id, "run_recipe_discovery", "FingerprintRecipe",
+          recipe_key, counts)
+    return {"recipe_key": recipe_key, **counts}
+
+
 @router.get("/recipes")
 def recipes_page(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
@@ -228,6 +310,7 @@ def recipes_page(request: Request, session: Session = Depends(get_session)):
         "request": request, "user": u,
         "by_category": _recipes_by_category(session),
         "test_result": None,
+        "run_result": None,
         "csrf": ensure_csrf(request),
     })
 
@@ -264,6 +347,7 @@ def recipe_test(
         "request": request, "user": u,
         "by_category": _recipes_by_category(session),
         "test_result": result,
+        "run_result": None,
         "csrf": ensure_csrf(request),
     })
 
@@ -285,3 +369,34 @@ def recipe_promote(
         audit(session, u.id, "promote_recipe", "FingerprintRecipe", recipe_key,
               {"enabled": True})
     return redirect("/admin/recipes")
+
+
+@router.post("/recipes/{recipe_key}/run", dependencies=[Depends(csrf_protect)])
+def recipe_run(
+    request: Request,
+    recipe_key: str,
+    session: Session = Depends(get_session),
+):
+    """FIX 1b: Run discovery for an ENABLED recipe and ingest via ingest_normalized.
+
+    Uses the FingerprintDiscoveryAdapter with the real engine discover/fetch.
+    Limit is capped at 25 per operator-triggered run (rate-limited, audited).
+    """
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+
+    run_result = _run_recipe_for_admin(
+        session, recipe_key,
+        limit=25,
+        actor_user_id=u.id,
+    )
+    audit(session, u.id, "recipe_run", "FingerprintRecipe", recipe_key, run_result)
+
+    return templates.TemplateResponse(request, "admin_recipes.html", {
+        "request": request, "user": u,
+        "by_category": _recipes_by_category(session),
+        "test_result": None,
+        "run_result": run_result,
+        "csrf": ensure_csrf(request),
+    })

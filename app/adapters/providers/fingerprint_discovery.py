@@ -17,9 +17,10 @@ from app.engine.discover import discover as engine_discover
 from app.engine.enrich import analyse, fetch as engine_fetch, norm_url
 from app.fingerprints.library import list_recipes, get_recipe, to_engine_recipe
 
-_LICENSE_TMPL = (
-    "Detected from public page source via urlscan.io index (recipe: {tech})"
-)
+# FIX 5: clean base license stored on SourceMeta; per-lead license includes
+# the recipe name via _LICENSE_TMPL.format(tech=...) in normalize().
+_BASE_LICENSE = "Detected from public page source via urlscan.io index"
+_LICENSE_TMPL = _BASE_LICENSE + " (recipe: {tech})"
 
 
 class FingerprintDiscoveryAdapter:
@@ -28,7 +29,8 @@ class FingerprintDiscoveryAdapter:
         name="Technology fingerprint",
         type="fingerprint_discovery",
         url="https://urlscan.io",
-        license="Detected from public page source via urlscan.io index (recipe: <tech>)",
+        # FIX 5: clean base string — no template placeholder stored on the source meta
+        license=_BASE_LICENSE,
         terms_status="permitted",
         regions=["*"],
         key_env="",          # urlscan free default; URLSCAN_KEY optional
@@ -87,6 +89,10 @@ class FingerprintDiscoveryAdapter:
 
         INV-12: returns None when zero verify_fingerprints are found in the
         page HTML — a page that merely links to the vendor is not a match.
+
+        FIX 4: belt-and-suspenders vendor exclusion — if the host matches any
+        recipe.exclude_hosts token, returns None immediately (never enrich the
+        vendor's own domain), independent of what discover() already filtered.
         """
         host = raw.get("host")
         recipe_key = raw.get("recipe_key")
@@ -98,6 +104,16 @@ class FingerprintDiscoveryAdapter:
             return None
 
         recipe = to_engine_recipe(row)
+
+        # FIX 4: belt-and-suspenders vendor exclusion (mirrors normalize_hosts in
+        # engine/discover.py).  Guard against the vendor's own domain slipping
+        # through discover() (e.g. after a discover_fn override in tests or after
+        # manual queue injection).
+        host_lower = host.lower().strip()
+        excl = [e.lower() for e in recipe.exclude_hosts]
+        if any(tok in host_lower for tok in excl):
+            return None  # vendor's own domain — never enrich
+
         url = norm_url(host)
         _fetch = fetch_fn or engine_fetch
         final_url, html = _fetch(url)
@@ -127,6 +143,7 @@ class FingerprintDiscoveryAdapter:
             **lead.ids,   # e.g. ruid, cuid for gloriafood
         }
 
+        # FIX 5: per-lead license includes the recipe name (not stored on meta)
         license_str = _LICENSE_TMPL.format(tech=recipe.type)
 
         return NormalizedLead(
