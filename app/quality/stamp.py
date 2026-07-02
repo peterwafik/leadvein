@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.core.config import DEFAULT_PHONE_REGION
 from app.quality.tiers import achieved_tier
 from app.quality.validators.email import validate_email, _default_mx
 from app.quality.validators.phone import validate_phone
@@ -12,11 +13,23 @@ DEFAULT_WEIGHTS = {"email": 25, "phone": 25, "address": 15, "website": 10,
                    "profile": 15, "freshness": 10}
 
 
-def build_validation(fields: dict, *, mx_lookup=None) -> dict:
+def _region_for(country: str) -> str:
+    """Return a phonenumbers region code derived from the lead's country field.
+
+    Accepts a 2-letter ISO-3166-1 alpha-2 code; everything else (empty,
+    multi-word country name, etc.) falls back to DEFAULT_PHONE_REGION.
+    """
+    code = (country or "").strip().upper()
+    return code if len(code) == 2 else DEFAULT_PHONE_REGION
+
+
+def build_validation(fields: dict, *, region: str | None = None, mx_lookup=None) -> dict:
+    if region is None:
+        region = _region_for(fields.get("country", ""))
     addr = fields.get("address") or {}
     blobs = {
         "email": validate_email(fields.get("email", ""), mx_lookup=mx_lookup or _default_mx),
-        "phone": validate_phone(fields.get("phone", "")),
+        "phone": validate_phone(fields.get("phone", ""), region=region),
         "address": validate_address(addr.get("line1", ""), addr.get("city", ""),
                                     addr.get("postal_code", ""), addr.get("country", ""),
                                     addr.get("lat"), addr.get("lon")),

@@ -4,6 +4,9 @@ import os
 
 DEV_SECRET = "dev-leadvault-secret"
 
+# Phone-validation region fallback.  Override via env for non-GB pilots.
+DEFAULT_PHONE_REGION: str = os.getenv("LEADVAULT_PHONE_REGION", "GB").upper()
+
 
 def env() -> str:
     return (os.getenv("LEADVAULT_ENV") or "dev").lower()

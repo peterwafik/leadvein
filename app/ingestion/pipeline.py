@@ -55,6 +55,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
         addr = n.address or {}
         _val = build_validation({
             "email": n.public_email, "phone": n.phone,
+            "country": addr.get("country", ""),
             "address": {"line1": addr.get("line1", ""),
                         "city": addr.get("city", ""),
                         "postal_code": addr.get("postal_code", ""),
