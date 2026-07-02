@@ -41,6 +41,17 @@ def overview(request: Request, session: Session = Depends(get_session)):
         "n_expired": n_expired, "csrf": ensure_csrf(request)})
 
 
+@router.post("/recompute-coverage", dependencies=[Depends(csrf_protect)])
+def recompute_coverage_route(request: Request, session: Session = Depends(get_session)):
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    from app.core.targeting.coverage import recompute_coverage
+    n = recompute_coverage(session)
+    audit(session, u.id, "recompute_coverage", "AttributeCoverage", "*", {"paths": n})
+    return redirect("/admin")
+
+
 @router.post("/purge-expired", dependencies=[Depends(csrf_protect)])
 def purge_expired_route(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
