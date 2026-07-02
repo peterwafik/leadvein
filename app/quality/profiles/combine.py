@@ -8,6 +8,8 @@ from app.quality.tiers import TIER_ORDER
 
 def combine_profiles(profiles: list[QualityProfile]) -> QualityProfile:
     profiles = [p for p in profiles if p is not None]
+    if not profiles:
+        raise ValueError("combine_profiles requires at least one profile")
     if len(profiles) == 1:
         return profiles[0]
     required: dict[str, str] = {}
@@ -17,7 +19,9 @@ def combine_profiles(profiles: list[QualityProfile]) -> QualityProfile:
             cur = required.get(field_)
             if cur is None or TIER_ORDER.index(tier) > TIER_ORDER.index(cur):
                 required[field_] = tier
-        weights.update(p.weights or {})
+        # weights merge takes max, mirroring required-tier merging
+        for f, w in p.weights.items():
+            weights[f] = max(weights.get(f, 0), w)
     return QualityProfile(
         key="+".join(p.key for p in profiles) or "none",
         label=" + ".join(p.label for p in profiles),

@@ -6,6 +6,7 @@ User requirement: if a campaign requires validated phone AND the buyer picks
 from __future__ import annotations
 
 import json
+import pytest
 
 from app.core.db import Lead
 from app.core.targeting.view import lead_view
@@ -59,3 +60,10 @@ def test_combine_never_lowers_a_tier():
     weaker = QualityProfile(key="w", label="w", required={"phone": "present"})
     combined = combine_profiles([a, weaker])
     assert combined.required["phone"] == "validated"
+
+
+def test_combine_empty_raises():
+    with pytest.raises(ValueError):
+        combine_profiles([])
+    with pytest.raises(ValueError):
+        combine_profiles([None])
