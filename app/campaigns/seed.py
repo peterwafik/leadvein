@@ -36,6 +36,59 @@ _CAMPAIGNS = [
         },
     },
     {
+        "key": "online_ordering",
+        "name": "Online ordering upgrades",
+        "description": (
+            "Restaurants running GloriaFood or ChowNow — "
+            "a proven ground-truth recipe for online-ordering intent. "
+            "Targets by tech fingerprint, not taxonomy (INV-8)."
+        ),
+        "quality_profile_key": "baseline",
+        "scoring_profile_key": "",
+        "gated_signals": [],
+        "param_schema": {
+            "area": {
+                "type": "city",
+                "label": "Area",
+                "help": "A UK town or city (optional)",
+            }
+        },
+        "composition_template": {
+            "op": "AND",
+            "nodes": [
+                {
+                    "predicate": "web.runs_tech",
+                    "params": {"recipe_in": ["gloriafood", "chownow"], "min_strength": 1},
+                },
+                {"predicate": "geo.city", "params": {"value": "{area}"}},
+                {"predicate": "contactability.has_business_contact", "params": {}},
+            ],
+        },
+    },
+    {
+        "key": "shopify_uk",
+        "name": "Shopify stores (UK)",
+        "description": (
+            "UK businesses running Shopify — "
+            "identified via tech fingerprint (INV-8: no category predicate)."
+        ),
+        "quality_profile_key": "baseline",
+        "scoring_profile_key": "",
+        "gated_signals": [],
+        "param_schema": {},
+        "composition_template": {
+            "op": "AND",
+            "nodes": [
+                {
+                    "predicate": "web.runs_tech",
+                    "params": {"recipe_in": ["shopify"], "min_strength": 1},
+                },
+                {"predicate": "geo.country", "params": {"value": "GB"}},
+                {"predicate": "contactability.has_business_contact", "params": {}},
+            ],
+        },
+    },
+    {
         "key": "business_restructuring",
         "name": "Business Restructuring",
         "description": (

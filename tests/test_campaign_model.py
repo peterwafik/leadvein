@@ -11,9 +11,9 @@ from app.campaigns.seed import seed_campaigns
 def test_seed_two_campaigns_idempotent():
     e = init_db("sqlite://")
     with Session(e) as s:
-        assert seed_campaigns(s) == 2
+        assert seed_campaigns(s) == 4
         seed_campaigns(s)                       # idempotent
-        assert len(list_active(s)) == 2
+        assert len(list_active(s)) == 4
         util = get_by_key(s, "utilities_uk")
         assert util and util.quality_profile_key == "utilities"
         # Utilities composition template is cross-category (INV-8): no category predicate
