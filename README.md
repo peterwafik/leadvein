@@ -136,3 +136,20 @@ To wire Stripe's own delivery to a deployed instance:
 2. In the Stripe Dashboard (test mode) → Developers → Webhooks, add an endpoint `https://<your-host>/stripe/webhook` subscribed to `checkout.session.completed`; copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
 3. Buy a pack with a Stripe test card (4242 4242 4242 4242) → confirm the credit lands once (the buyer's ledger shows one `stripe_purchase` row). Stripe's "resend" on the event must NOT double-credit.
    - No public URL handy? Use the Stripe CLI: `stripe listen --forward-to localhost:8000/stripe/webhook` then `stripe trigger checkout.session.completed`.
+
+### Lead quality gate — rollout & tracked follow-ups
+
+- **Backfill required before a pilot:** leads ingested before the quality gate carry an empty
+  `validation_json` and are therefore held back at search/preview/unlock (fail-closed — the safe
+  direction). Re-ingest / re-stamp inventory so hot leads actually flow.
+- **Schema migration (persistent DB only):** the gate added two `Lead` columns —
+  `validation_json` and `completeness_score`. On a *persistent* database (Postgres, or a kept SQLite
+  file) add them via an `ALTER TABLE` migration; `SQLModel.metadata.create_all` only creates missing
+  tables, it does not add columns to an existing one. The pilot's throwaway SQLite DB is recreated, so
+  no action there.
+- **Phone region is UK-only (tracked follow-up — config, not hard-code):**
+  `app/quality/validators/phone.py` parses national-format numbers with a hard-coded `region="GB"`.
+  International `+E.164` numbers validate correctly regardless — confirmed: `+44 20 7946 0958`,
+  `+1 202 555 0143`, `+33 1 42 68 53 00` all validate; a US number in national format `202 555 0143`
+  (no `+`) does not. So international inventory is NOT silently dropped, only **national-format non-GB**
+  numbers. Before any non-UK ingest, make the region configurable (per source/country).
