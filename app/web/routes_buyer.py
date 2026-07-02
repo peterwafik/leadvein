@@ -219,6 +219,19 @@ def billing(request: Request, session: Session = Depends(get_session)):
         "csrf": ensure_csrf(request)})
 
 
+@router.post("/composer/estimate")
+async def composer_estimate(request: Request, session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return Response(status_code=401)
+    body = await request.json()
+    composition = body.get("composition") or {"op": "AND", "nodes": []}
+    from app.core.targeting.estimate import estimate as targeting_estimate
+    est = targeting_estimate(session, u.buyer_account_id, composition,
+                             sample=int(body.get("sample", 9)))
+    return est
+
+
 @router.get("/suppression")
 def suppression_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
