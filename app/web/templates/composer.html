@@ -93,30 +93,56 @@
     <div id="panelGuided" class="rounded-xl border border-slate-200 bg-white p-5 shadow-card space-y-5">
       <p class="text-[13px] text-ink-500">The three most effective filters — most campaigns start here.</p>
 
-      {# Area #}
-      {% call ui.field('Area', 'Suggestions are areas that already have leads (' ~ (cities|length) ~ ' so far).') %}
-        <input type="text" id="guidedCity" placeholder="e.g. Oxford" list="cityListG" autocomplete="off"
-          class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
-        <datalist id="cityListG">{% for c in cities %}<option value="{{ c }}"></option>{% endfor %}</datalist>
+      {# Cities — multi-select chip control #}
+      {% call ui.field('Cities', 'Pick one or more cities. Inventory has ' ~ (cities|length) ~ ' cities — type to filter.') %}
+        <div id="guidedCityBox"
+          class="flex min-h-[46px] flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-1.5 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25 cursor-text"
+          onclick="document.getElementById('guidedCityInput').focus()">
+          <input id="guidedCityInput" type="text" placeholder="Search cities…" autocomplete="off"
+            class="min-w-[120px] flex-1 border-0 bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-ink-400">
+        </div>
+        <div class="mt-1.5 flex items-center gap-2">
+          <button type="button" id="citiesSelectAll"
+            class="text-[12px] font-medium text-brand-600 hover:text-brand-800 hover:underline">Select all ({{ cities|length }})</button>
+          <span class="text-ink-300 text-[12px]">&middot;</span>
+          <button type="button" id="citiesClear"
+            class="text-[12px] font-medium text-ink-500 hover:text-ink-700 hover:underline">Clear</button>
+        </div>
+        {% if cities %}
+        <div id="citySuggBox" class="mt-1.5 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          {% for c in cities %}
+          <button type="button" data-city="{{ c }}"
+            class="city-sug-btn w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-ink-700 hover:bg-brand-50 hover:text-brand-700 transition">
+            <span class="city-check shrink-0 text-brand-600" style="opacity:0;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>
+            </span>
+            <span>{{ c }}</span>
+          </button>
+          {% endfor %}
+        </div>
+        {% endif %}
       {% endcall %}
 
-      {# Business types (chips from category options available in inventory) #}
-      {% set cat_options_avail = [] %}
-      {% for opt in options.available %}
-        {% if opt.key == 'category.any' %}
-          {# no-op: chips are driven from cat_options below #}
-        {% endif %}
-      {% endfor %}
-      {% call ui.field('Business types', 'Click to add or type and press Enter. Leave empty for all types.') %}
+      {# Business types — chips with visible selected state + searchable scrollable suggestion list #}
+      {% call ui.field('Business types', 'Select types below or type and press Enter. Leave empty for all types.') %}
         <div id="guidedChipBox" class="flex min-h-[46px] flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-1.5 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25">
           <input id="guidedChipInput" type="text" placeholder="Add a business type…"
             class="min-w-[120px] flex-1 border-0 bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-ink-400">
         </div>
         {% if cat_options %}
-        <div class="mt-2 flex flex-wrap gap-1.5">
+        <div class="mt-2">
+          <input type="text" id="catSugSearch" placeholder="Filter types…" autocomplete="off"
+            class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-ink-700 placeholder:text-ink-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-500/20">
+        </div>
+        <div id="catSugBox" class="mt-1.5 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
           {% for s in cat_options %}
           <button type="button" data-cat="{{ s }}"
-            class="guided-cat-sug rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium capitalize text-ink-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">{{ s|replace('_',' ') }}</button>
+            class="guided-cat-sug w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] capitalize text-ink-600 hover:bg-brand-50 hover:text-brand-700 transition">
+            <span class="cat-check shrink-0 text-brand-600" style="opacity:0;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>
+            </span>
+            <span class="cat-sug-label">{{ s|replace('_',' ') }}</span>
+          </button>
           {% endfor %}
         </div>
         {% endif %}
@@ -361,12 +387,14 @@ window._segmentPreset = null;
 // Campaign meta injected by the server (null when no ?campaign= param)
 window._campaignKey = {{ ('"' ~ campaign.key ~ '"') | safe if campaign is defined and campaign else 'null' }};
 window._csrfToken = {{ ('"' ~ csrf ~ '"') | safe }};
+window._allCities = {{ cities | tojson }};
 </script>
 <script>
 (function () {
   /* ── State ────────────────────────────────────────────────────────────── */
   let mode = 'guided';
   let guidedCats = [];
+  let guidedCities = [];
   let debounceTimer = null;
   let _qualityProfileKey = '';  // set by apply-campaign, threaded into estimate
 
@@ -384,38 +412,160 @@ window._csrfToken = {{ ('"' ~ csrf ~ '"') | safe }};
     scheduleEstimate();
   };
 
-  /* ── Guided: chips ───────────────────────────────────────────────────── */
+  /* ── Guided: city multi-select ──────────────────────────────────────── */
+  const gCityBox = document.getElementById('guidedCityBox');
+  const gCityInput = document.getElementById('guidedCityInput');
+
+  function _updateCitySuggState() {
+    document.querySelectorAll('.city-sug-btn').forEach(function (btn) {
+      const city = btn.dataset.city;
+      const check = btn.querySelector('.city-check');
+      const selected = guidedCities.indexOf(city) !== -1;
+      btn.classList.toggle('bg-brand-50', selected);
+      btn.classList.toggle('text-brand-700', selected);
+      btn.classList.toggle('font-semibold', selected);
+      if (check) check.style.opacity = selected ? '1' : '0';
+    });
+  }
+
+  function renderCityChips() {
+    if (!gCityBox) return;
+    gCityBox.querySelectorAll('.city-chip').forEach(function (c) { c.remove(); });
+    guidedCities.forEach(function (city) {
+      const el = document.createElement('span');
+      el.className = 'city-chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-700 ring-1 ring-brand-100';
+      el.innerHTML = city + ' <button type="button" class="text-brand-500 hover:text-brand-800 leading-none ml-0.5">&times;</button>';
+      el.querySelector('button').onclick = function () {
+        guidedCities = guidedCities.filter(function (c) { return c !== city; });
+        renderCityChips();
+        scheduleEstimate();
+      };
+      gCityBox.insertBefore(el, gCityInput);
+    });
+    _updateCitySuggState();
+  }
+
+  if (gCityInput) {
+    gCityInput.addEventListener('input', function () {
+      const q = gCityInput.value.trim().toLowerCase();
+      document.querySelectorAll('.city-sug-btn').forEach(function (btn) {
+        btn.style.display = (!q || btn.dataset.city.toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+      });
+    });
+    gCityInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        gCityInput.value = '';
+        document.querySelectorAll('.city-sug-btn').forEach(function (btn) { btn.style.display = ''; });
+      }
+    });
+  }
+
+  document.querySelectorAll('.city-sug-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const city = btn.dataset.city;
+      const idx = guidedCities.indexOf(city);
+      if (idx !== -1) {
+        guidedCities.splice(idx, 1);
+      } else {
+        guidedCities.push(city);
+      }
+      renderCityChips();
+      scheduleEstimate();
+    });
+  });
+
+  const selectAllCitiesBtn = document.getElementById('citiesSelectAll');
+  const clearCitiesBtn = document.getElementById('citiesClear');
+  if (selectAllCitiesBtn) {
+    selectAllCitiesBtn.addEventListener('click', function () {
+      guidedCities = (window._allCities || []).slice();
+      renderCityChips();
+      scheduleEstimate();
+    });
+  }
+  if (clearCitiesBtn) {
+    clearCitiesBtn.addEventListener('click', function () {
+      guidedCities = [];
+      renderCityChips();
+      scheduleEstimate();
+    });
+  }
+
+  /* ── Guided: category chips ──────────────────────────────────────────── */
   const gBox = document.getElementById('guidedChipBox');
   const gInput = document.getElementById('guidedChipInput');
 
+  function _updateCatSuggState() {
+    document.querySelectorAll('.guided-cat-sug').forEach(function (btn) {
+      const cat = btn.dataset.cat;
+      const check = btn.querySelector('.cat-check');
+      const selected = guidedCats.indexOf(cat) !== -1;
+      btn.classList.toggle('bg-brand-50', selected);
+      btn.classList.toggle('text-brand-700', selected);
+      btn.classList.toggle('font-semibold', selected);
+      if (check) check.style.opacity = selected ? '1' : '0';
+    });
+  }
+
   function renderGuidedChips() {
-    gBox.querySelectorAll('.chip').forEach(c => c.remove());
-    guidedCats.forEach(cat => {
+    if (!gBox) return;
+    gBox.querySelectorAll('.chip').forEach(function (c) { c.remove(); });
+    guidedCats.forEach(function (cat) {
       const el = document.createElement('span');
       el.className = 'chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium capitalize text-brand-700 ring-1 ring-brand-100';
       el.innerHTML = cat.replace(/_/g, ' ') + ' <button type="button" class="text-brand-500 hover:text-brand-800">&times;</button>';
-      el.querySelector('button').onclick = () => { guidedCats = guidedCats.filter(c => c !== cat); renderGuidedChips(); scheduleEstimate(); };
+      el.querySelector('button').onclick = function () {
+        guidedCats = guidedCats.filter(function (c) { return c !== cat; });
+        renderGuidedChips();
+        scheduleEstimate();
+      };
       gBox.insertBefore(el, gInput);
     });
+    _updateCatSuggState();
   }
 
   function addGuidedCat(v) {
     v = (v || '').trim().toLowerCase().replace(/\s+/g, '_');
-    if (v && !guidedCats.includes(v)) { guidedCats.push(v); }
-    gInput.value = '';
+    if (v && guidedCats.indexOf(v) === -1) { guidedCats.push(v); }
+    if (gInput) gInput.value = '';
     renderGuidedChips();
     scheduleEstimate();
   }
 
-  gInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addGuidedCat(gInput.value); }
+  if (gInput) {
+    gInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addGuidedCat(gInput.value); }
+    });
+  }
+  document.querySelectorAll('.guided-cat-sug').forEach(function (b) {
+    b.addEventListener('click', function () {
+      const cat = b.dataset.cat;
+      const idx = guidedCats.indexOf(cat);
+      if (idx !== -1) {
+        guidedCats.splice(idx, 1);
+        renderGuidedChips();
+        scheduleEstimate();
+      } else {
+        addGuidedCat(cat);
+      }
+    });
   });
-  document.querySelectorAll('.guided-cat-sug').forEach(b =>
-    b.addEventListener('click', () => addGuidedCat(b.dataset.cat))
-  );
+
+  // Category suggestion search filter
+  const catSugSearch = document.getElementById('catSugSearch');
+  if (catSugSearch) {
+    catSugSearch.addEventListener('input', function () {
+      const q = catSugSearch.value.trim().toLowerCase();
+      document.querySelectorAll('.guided-cat-sug').forEach(function (btn) {
+        const label = btn.querySelector('.cat-sug-label');
+        const text = (label ? label.textContent : (btn.dataset.cat || '')).toLowerCase();
+        btn.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+      });
+    });
+  }
 
   /* ── Guided: other inputs ────────────────────────────────────────────── */
-  ['guidedCity', 'guidedScore'].forEach(id => {
+  ['guidedScore'].forEach(function (id) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', scheduleEstimate);
     if (el) el.addEventListener('change', scheduleEstimate);
@@ -476,43 +626,46 @@ window._csrfToken = {{ ('"' ~ csrf ~ '"') | safe }};
   function buildComposition() {
     const nodes = [];
     if (mode === 'guided') {
-      const city = (document.getElementById('guidedCity').value || '').trim();
-      const score = parseInt(document.getElementById('guidedScore').value || '0', 10);
-      if (city) {
-        nodes.push({ predicate: 'geo.city', params: { value: city }, negate: false });
+      // Multi-select cities → geo.city_any (OR-semantics across all chosen cities)
+      if (guidedCities.length) {
+        nodes.push({ predicate: 'geo.city_any', params: { in: guidedCities.slice() }, negate: false });
       }
+      const score = parseInt(document.getElementById('guidedScore').value || '0', 10);
       if (guidedCats.length) {
-        nodes.push({ predicate: 'category.any', params: { in: guidedCats }, negate: false });
+        nodes.push({ predicate: 'category.any', params: { in: guidedCats.slice() }, negate: false });
       }
       if (score > 0) {
         nodes.push({ predicate: 'quality.min_score', params: { min: score }, negate: false });
       }
     } else {
       // Advanced mode
-      document.querySelectorAll('.adv-condition').forEach(row => {
+      document.querySelectorAll('.adv-condition').forEach(function (row) {
         const cb = row.querySelector('.adv-enable');
         if (!cb || !cb.checked) return;
         const key = row.dataset.key;
-        const schema = JSON.parse(row.dataset.schema || '{}');
+        let schema = {};
+        try { schema = JSON.parse(row.dataset.schema || '{}'); } catch (e) { schema = {}; }
         const params = {};
-        for (const [pname, ptype] of Object.entries(schema)) {
+        Object.keys(schema).forEach(function (pname) {
+          const ptype = schema[pname];
           if (ptype === 'list[string]') {
-            const hiddenEl = row.querySelector(`.adv-chip-value[data-param="${pname}"]`);
+            const hiddenEl = row.querySelector('.adv-chip-value[data-param="' + pname + '"]');
             try { params[pname] = hiddenEl ? JSON.parse(hiddenEl.value || '[]') : []; }
-            catch { params[pname] = []; }
+            catch (e) { params[pname] = []; }
           } else if (ptype === 'int') {
-            const el = row.querySelector(`.adv-param-input[data-param="${pname}"]`);
+            const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]');
             params[pname] = el ? parseInt(el.value || '0', 10) : 0;
           } else {
-            const el = row.querySelector(`.adv-param-input[data-param="${pname}"]`);
+            const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]');
             params[pname] = el ? (el.value || '') : '';
           }
-        }
-        const negate = row.querySelector('.adv-negate')?.checked || false;
-        nodes.push({ predicate: key, params, negate });
+        });
+        const negEl = row.querySelector('.adv-negate');
+        const negate = negEl ? negEl.checked : false;
+        nodes.push({ predicate: key, params: params, negate: negate });
       });
     }
-    return { op: 'AND', nodes };
+    return { op: 'AND', nodes: nodes };
   }
 
   /* ── Schedule estimate (debounced) ───────────────────────────────────── */
@@ -758,9 +911,8 @@ window._csrfToken = {{ ('"' ~ csrf ~ '"') | safe }};
     }
     // Reset guided state
     guidedCats = [];
-    const cityEl = document.getElementById('guidedCity');
+    guidedCities = [];
     const scoreEl = document.getElementById('guidedScore');
-    if (cityEl) cityEl.value = '';
     if (scoreEl) scoreEl.value = '0';
     // Uncheck all advanced conditions
     document.querySelectorAll('.adv-enable').forEach(function (cb) {
@@ -770,9 +922,8 @@ window._csrfToken = {{ ('"' ~ csrf ~ '"') | safe }};
     });
 
     // A composition maps cleanly to guided only if EVERY node is a guided control.
-    // If ANY node needs advanced, load EVERYTHING into advanced rows so no predicate
-    // (e.g. geo.city) is orphaned in the guided panel when the mode switches.
-    const GUIDED = { 'geo.city': 1, 'quality.min_score': 1, 'category.any': 1 };
+    // geo.city (legacy) and geo.city_any (new multi-select) both map to guided.
+    const GUIDED = { 'geo.city': 1, 'geo.city_any': 1, 'quality.min_score': 1, 'category.any': 1 };
     const allGuided = p.nodes.every(function (n) { return n && n.predicate && GUIDED[n.predicate]; });
 
     function loadAdvancedRow(node) {
@@ -826,18 +977,28 @@ window._csrfToken = {{ ('"' ~ csrf ~ '"') | safe }};
       p.nodes.forEach(function (node) {
         if (!node || !node.predicate) return;
         if (node.predicate === 'geo.city') {
-          if (cityEl) cityEl.value = (node.params && node.params.value) || '';
+          // Legacy single-city predicate → add to multi-select
+          const city = (node.params && node.params.value) || '';
+          if (city && guidedCities.indexOf(city) === -1) guidedCities.push(city);
+        } else if (node.predicate === 'geo.city_any') {
+          // New multi-city predicate
+          const cities = (node.params && Array.isArray(node.params.in)) ? node.params.in : [];
+          cities.forEach(function (city) {
+            if (city && guidedCities.indexOf(city) === -1) guidedCities.push(city);
+          });
         } else if (node.predicate === 'quality.min_score') {
           if (scoreEl) scoreEl.value = String((node.params && node.params.min) || 0);
         } else if (node.predicate === 'category.any') {
           const cats = (node.params && Array.isArray(node.params.in)) ? node.params.in : [];
-          cats.forEach(function (cat) { if (cat && !guidedCats.includes(cat)) guidedCats.push(cat); });
+          cats.forEach(function (cat) { if (cat && guidedCats.indexOf(cat) === -1) guidedCats.push(cat); });
         }
       });
+      renderCityChips();
       renderGuidedChips();
       setMode('guided');
     } else {
       p.nodes.forEach(function (node) { if (node && node.predicate) loadAdvancedRow(node); });
+      renderCityChips();
       renderGuidedChips();
       setMode('advanced');
     }
