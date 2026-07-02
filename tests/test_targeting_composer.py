@@ -156,7 +156,8 @@ def test_delete_segment_via_http():
 
 
 def test_composer_get_with_segment_preset():
-    """GET /app/composer?segment=<id> passes composition_json as 'preset' to the template."""
+    """GET /app/composer?segment=<id> passes composition_json as 'preset' to the template
+    AND the template wires JS consumption so the builder is rehydrated on load."""
     import app.leadvault as lv
     from sqlmodel import select
     from app.core.db import User
@@ -177,5 +178,32 @@ def test_composer_get_with_segment_preset():
     # GET composer with segment param
     r = c.get(f"/app/composer?segment={seg_id}")
     assert r.status_code == 200
-    # The preset JSON should be embedded in the page
+    # The preset JSON must be embedded in the page (the assignment side)
     assert "London" in r.text
+    assert "window._segmentPreset" in r.text
+    # The page must ALSO wire the consumption — the IIFE reads _segmentPreset back.
+    # Assignment pattern:  window._segmentPreset = <json>
+    # Consumption pattern: const p = window._segmentPreset  (read into a variable)
+    # If this assertion fails, the "Open segment" preset load is dead code.
+    assert "= window._segmentPreset" in r.text, (
+        "composer JS must READ _segmentPreset (consumption hook missing — "
+        "loading a saved segment would silently open an empty builder)"
+    )
+
+
+def test_composer_estimate_bad_predicate_returns_400():
+    """Unknown predicate → 400 not 500; valid empty composition → 200."""
+    c = _client()
+    _login_buyer(c)
+
+    # Unknown predicate: must return 400 (not 500 / KeyError)
+    bad = {"composition": {"op": "AND", "nodes": [
+        {"predicate": "does.not.exist", "params": {}}
+    ]}}
+    r = c.post("/app/composer/estimate", json=bad)
+    assert r.status_code == 400, f"expected 400 for unknown predicate, got {r.status_code}"
+
+    # Valid (empty) composition: must return 200
+    good = {"composition": {"op": "AND", "nodes": []}}
+    r2 = c.post("/app/composer/estimate", json=good)
+    assert r2.status_code == 200, f"expected 200 for valid composition, got {r2.status_code}"

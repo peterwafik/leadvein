@@ -504,8 +504,77 @@ window._segmentPreset = null;
     return card;
   }
 
-  /* ── Initial estimate on page load ──────────────────────────────────── */
-  scheduleEstimate();
+  /* ── Load saved segment preset (if any) then run initial estimate ────── */
+  (function _loadSegmentPreset() {
+    const p = window._segmentPreset;
+    if (!p || typeof p !== 'object' || !Array.isArray(p.nodes) || !p.nodes.length) {
+      scheduleEstimate();
+      return;
+    }
+    let needAdvanced = false;
+    p.nodes.forEach(function (node) {
+      if (!node || !node.predicate) return;
+      if (node.predicate === 'geo.city') {
+        const el = document.getElementById('guidedCity');
+        if (el) el.value = (node.params && node.params.value) || '';
+      } else if (node.predicate === 'quality.min_score') {
+        const el = document.getElementById('guidedScore');
+        if (el) el.value = String((node.params && node.params.min) || 0);
+      } else if (node.predicate === 'category.any') {
+        const cats = (node.params && Array.isArray(node.params.in)) ? node.params.in : [];
+        cats.forEach(function (cat) {
+          if (cat && !guidedCats.includes(cat)) guidedCats.push(cat);
+        });
+      } else {
+        needAdvanced = true;
+        const row = document.querySelector('.adv-condition[data-key="' + node.predicate + '"]');
+        if (!row) return;
+        const cb = row.querySelector('.adv-enable');
+        if (cb) cb.checked = true;
+        const paramsDiv = row.querySelector('.adv-params');
+        if (paramsDiv) paramsDiv.classList.remove('hidden');
+        const schema = JSON.parse(row.dataset.schema || '{}');
+        const params = node.params || {};
+        for (const [pname, ptype] of Object.entries(schema)) {
+          if (ptype === 'list[string]') {
+            const vals = Array.isArray(params[pname]) ? params[pname] : [];
+            const hiddenEl = row.querySelector('.adv-chip-value[data-param="' + pname + '"]');
+            if (hiddenEl) hiddenEl.value = JSON.stringify(vals);
+            const chipBox = row.querySelector('.adv-chip-box[data-param="' + pname + '"]');
+            if (chipBox) {
+              const chipInp = chipBox.querySelector('.adv-chip-input');
+              vals.forEach(function (val) {
+                const el = document.createElement('span');
+                el.className = 'adv-chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 ring-1 ring-brand-100';
+                el.innerHTML = val + ' <button type="button" class="text-brand-500">×</button>';
+                el.querySelector('button').onclick = function () {
+                  el.remove();
+                  const remaining = Array.from(chipBox.querySelectorAll('.adv-chip')).map(function (c) {
+                    return c.textContent.replace(/\s*×\s*$/, '').trim();
+                  });
+                  if (hiddenEl) hiddenEl.value = JSON.stringify(remaining);
+                  scheduleEstimate();
+                };
+                if (chipInp) chipBox.insertBefore(el, chipInp);
+                else chipBox.appendChild(el);
+              });
+            }
+          } else if (ptype === 'int') {
+            const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]');
+            if (el) el.value = String(params[pname] !== undefined ? params[pname] : 0);
+          } else {
+            const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]');
+            if (el) el.value = params[pname] !== undefined ? params[pname] : '';
+          }
+        }
+        const negateEl = row.querySelector('.adv-negate');
+        if (negateEl) negateEl.checked = !!(node.negate);
+      }
+    });
+    renderGuidedChips();
+    if (needAdvanced) setMode('advanced');
+    scheduleEstimate();
+  })();
 })();
 </script>
 {% endblock %}

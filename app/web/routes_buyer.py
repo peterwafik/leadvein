@@ -285,11 +285,17 @@ async def composer_estimate(request: Request, session: Session = Depends(get_ses
     u = _buyer(request, session)
     if not u:
         return Response(status_code=401)
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return Response(status_code=400)
     composition = body.get("composition") or {"op": "AND", "nodes": []}
     from app.core.targeting.estimate import estimate as targeting_estimate
-    est = targeting_estimate(session, u.buyer_account_id, composition,
-                             sample=int(body.get("sample", 9)))
+    try:
+        est = targeting_estimate(session, u.buyer_account_id, composition,
+                                 sample=int(body.get("sample", 9)))
+    except (ValueError, KeyError, TypeError):
+        return Response(status_code=400)
     return est
 
 
