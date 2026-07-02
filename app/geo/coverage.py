@@ -6,6 +6,7 @@ this cheap; ingestion-sized changes surface within a minute or on invalidate().
 """
 from __future__ import annotations
 
+import copy
 import time
 
 from sqlmodel import Session, select
@@ -27,7 +28,7 @@ def invalidate_geo_counts() -> None:
 def geo_lead_counts(session: Session) -> dict:
     now = time.monotonic()
     if _cache["data"] is not None and now - _cache["at"] < _TTL:
-        return _cache["data"]
+        return copy.deepcopy(_cache["data"])
     countries: dict[str, int] = {}
     cities: dict[tuple[str, str], int] = {}
     regions: dict[tuple[str, str], int] = {}
@@ -38,8 +39,10 @@ def geo_lead_counts(session: Session) -> dict:
         if not passes_serve_filters(session, None, lead, None):
             continue
         cc = (lead.country or "").upper()
-        if cc:
-            countries[cc] = countries.get(cc, 0) + 1
+        if not cc:
+            # Skip city/region counting for country-less leads; unreachable by per-country queries
+            continue
+        countries[cc] = countries.get(cc, 0) + 1
         if lead.city:
             key = (cc, lead.city.strip().lower())
             cities[key] = cities.get(key, 0) + 1
@@ -51,4 +54,4 @@ def geo_lead_counts(session: Session) -> dict:
             "city_names": city_names}
     _cache["at"] = now
     _cache["data"] = data
-    return data
+    return copy.deepcopy(data)
