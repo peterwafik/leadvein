@@ -104,6 +104,18 @@ class Lead(SQLModel, table=True):
     times_sold: int = 0
     last_sold_at: str | None = None
     dedupe_key: str = Field(default="", index=True)
+    # per-field provenance: {field: {"source":str,"license":str,"at":str}}
+    field_provenance_json: str = Field(default="{}")
+
+
+class SourceBudget(SQLModel, table=True):
+    __tablename__ = "lv_source_budget"
+    id: int | None = Field(default=None, primary_key=True)
+    source_key: str = Field(default="", index=True)
+    used: int = Field(default=0)
+    cap: int = Field(default=0)
+    window_start: str = Field(default_factory=_now)
+    updated_at: str = Field(default_factory=_now)
 
 
 class LeadRecipe(SQLModel, table=True):
