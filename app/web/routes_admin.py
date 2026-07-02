@@ -109,8 +109,10 @@ def sources(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     rows = session.exec(select(LeadSource)).all()
+    adapter_statuses = adapter_registry.list_status(session)
     return templates.TemplateResponse(request, "admin_sources.html", {
-        "request": request, "user": u, "rows": rows})
+        "request": request, "user": u, "rows": rows,
+        "adapter_statuses": adapter_statuses})
 
 
 @router.get("/categories")

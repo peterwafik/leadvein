@@ -4,7 +4,69 @@
 {% block body %}
 {{ ui.page_intro('Data sources', 'All configured data source adapters and their compliance status. Each source must have accepted terms before leads can be ingested from it.') }}
 
+{# ── US outreach hold-gate banner ─────────────────────────────────────────── #}
+{{ ui.banner('<strong>US outreach: HELD pending DNC/TCPA gate</strong> — US leads are not sold. All leads with a US region are blocked at search, preview, and unlock until DNC/TCPA clearance is implemented.', 'warn') }}
+
+{# ── Connected adapters ────────────────────────────────────────────────────── #}
+{% if adapter_statuses %}
+  <h3 class="text-base font-semibold text-ink-900 mb-3">Connected adapters</h3>
+  {% call ui.card(extra='overflow-x-auto mb-8') %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200">
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Name</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Type</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Status</th>
+        <th class="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wide text-ink-500">Terms</th>
+        <th class="px-4 py-3 text-right text-[12px] font-semibold uppercase tracking-wide text-ink-500">Free-tier cap</th>
+        <th class="px-4 py-3 text-right text-[12px] font-semibold uppercase tracking-wide text-ink-500">Used</th>
+        <th class="px-4 py-3 text-right text-[12px] font-semibold uppercase tracking-wide text-ink-500">Remaining</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in adapter_statuses %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60 transition">
+        <td class="px-4 py-3 font-medium text-ink-900">{{ a.name }}</td>
+        <td class="px-4 py-3">{{ ui.badge(a.type, 'blue') }}</td>
+        <td class="px-4 py-3">
+          {% if a.enabled %}
+            {{ ui.badge('enabled', 'green') }}
+          {% else %}
+            {{ ui.badge('disabled', 'amber') }}
+          {% endif %}
+        </td>
+        <td class="px-4 py-3">
+          {{ ui.badge(a.terms_status, 'amber' if a.terms_status == 'restricted' else ('green' if a.terms_status == 'accepted' else 'neutral')) }}
+        </td>
+        <td class="px-4 py-3 text-right font-mono text-[12px] text-ink-600">
+          {% if a.free_tier and a.free_tier.get('cap', 0) > 0 %}
+            {{ a.free_tier['cap'] }}
+          {% else %}
+            <span class="text-ink-400">unlimited</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-right font-mono text-[12px] text-ink-600">{{ a.used }}</td>
+        <td class="px-4 py-3 text-right font-mono text-[12px] text-ink-600">
+          {% if a.free_tier and a.free_tier.get('cap', 0) > 0 %}
+            {{ a.remaining }}
+          {% else %}
+            <span class="text-ink-400">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+{% else %}
+  {{ ui.empty_state('No adapters registered',
+     'Register enrichment adapters in the application to see them here.',
+     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg>') }}
+{% endif %}
+
+{# ── Ingested lead sources (LeadSource table) ─────────────────────────────── #}
 {% if rows %}
+  <h3 class="text-base font-semibold text-ink-900 mb-3">Ingested lead sources</h3>
   {% call ui.card(extra='overflow-x-auto') %}
   <table class="w-full text-sm">
     <thead>

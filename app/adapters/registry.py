@@ -34,12 +34,20 @@ def enabled(adapter) -> bool:
 def list_status(session=None) -> list[dict]:
     """Return a status dict for every registered adapter.
 
-    Budget/usage fields (used, remaining) are reserved for a later task and
-    default to 0 here so callers can rely on the keys existing.
+    Budget/usage fields (used, remaining) are populated from SourceBudget when a
+    *session* is provided; otherwise both default to 0.
     """
+    from app.adapters.budget import remaining as _remaining
     result = []
     for adapter in _ADAPTERS.values():
         meta = adapter.meta
+        cap: int = meta.free_tier.get("cap", 0) if meta.free_tier else 0
+        if session is not None and cap > 0:
+            rem = _remaining(session, meta.key, cap)
+            used = cap - rem
+        else:
+            rem = 0
+            used = 0
         result.append({
             "key": meta.key,
             "name": meta.name,
@@ -47,7 +55,7 @@ def list_status(session=None) -> list[dict]:
             "enabled": enabled(adapter),
             "terms_status": meta.terms_status,
             "free_tier": meta.free_tier,
-            "used": 0,
-            "remaining": 0,
+            "used": used,
+            "remaining": rem,
         })
     return result

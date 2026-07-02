@@ -80,6 +80,9 @@ register_targeting_runtime()
 from app.quality.runtime import register_quality_runtime
 register_quality_runtime()
 
+from app.compliance.outreach_gate import register_outreach_gate
+register_outreach_gate()
+
 
 @app.get("/")
 def root():

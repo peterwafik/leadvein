@@ -42,12 +42,19 @@ def _reset_rate_limiter():
 def _quality_gate_on():
     """Gate ON by default, mirroring production; tests that exercise non-quality concerns
     opt OFF explicitly with a reason (call app.core.serve_filters.clear() at test start
-    with a comment explaining why quality is orthogonal to what the test exercises)."""
+    with a comment explaining why quality is orthogonal to what the test exercises).
+
+    Both the quality gate and the US outreach hold-gate are registered here to match
+    the production startup sequence in app/leadvault.py.  Existing pilot leads are
+    GB/empty-country, so the outreach gate is a no-op for them.
+    """
     import app.core.serve_filters as _sf
     import app.quality.runtime as _qr
     import app.quality.serve_gate as _sg
     from app.quality.profiles.baseline import BASELINE
+    from app.compliance.outreach_gate import register_outreach_gate
     _sf.clear()
     _qr.register_quality_runtime()
     _sg.set_gate_profile(BASELINE)
+    register_outreach_gate()
     yield
