@@ -219,6 +219,18 @@ def billing(request: Request, session: Session = Depends(get_session)):
         "csrf": ensure_csrf(request)})
 
 
+@router.get("/composer")
+def composer_page(request: Request, session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    from app.core.targeting.composer import predicate_options
+    return templates.TemplateResponse(request, "composer.html", {
+        "request": request, "user": u, "csrf": ensure_csrf(request),
+        "options": predicate_options(session), "credits": balance(session, u.buyer_account_id),
+        **_inventory_options(session)})
+
+
 @router.post("/composer/estimate")
 async def composer_estimate(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)

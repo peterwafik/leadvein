@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %} · Composer{% endblock %}
+{% block heading %}Audience Composer{% endblock %}
+{% block topbar %}{{ ui.credits_pill(credits if credits is defined else '—') }}{% endblock %}
+{% block body %}
+{{ ui.page_intro('Build your audience',
+   'Define exactly who you want to target. Guided mode covers the most common filters; Advanced mode exposes every registered predicate. Results update live as you build — masked previews only, ODbL-licensed.') }}
+
+{# ── Mode toggle ───────────────────────────────────────────────────────── #}
+<div class="mb-6 flex items-center gap-3">
+  <span class="text-sm font-medium text-ink-700">Mode:</span>
+  <div class="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-card" role="tablist">
+    <button id="modeGuided" type="button" role="tab" aria-selected="true"
+      class="mode-btn rounded-md px-4 py-1.5 text-sm font-semibold transition bg-brand-600 text-white"
+      onclick="setMode('guided')">Guided</button>
+    <button id="modeAdvanced" type="button" role="tab" aria-selected="false"
+      class="mode-btn rounded-md px-4 py-1.5 text-sm font-semibold transition text-ink-600 hover:text-ink-900"
+      onclick="setMode('advanced')">Advanced</button>
+  </div>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[1fr_380px]">
+  <!-- ── Left: builder ──────────────────────────────────────────────────── -->
+  <div class="space-y-5">
+
+    {# ── GUIDED panel ──────────────────────────────────────────────────── #}
+    <div id="panelGuided" class="rounded-xl border border-slate-200 bg-white p-5 shadow-card space-y-5">
+      <p class="text-[13px] text-ink-500">The three most effective filters — most campaigns start here.</p>
+
+      {# Area #}
+      {% call ui.field('Area', 'Suggestions are areas that already have leads (' ~ (cities|length) ~ ' so far).') %}
+        <input type="text" id="guidedCity" placeholder="e.g. Oxford" list="cityListG" autocomplete="off"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+        <datalist id="cityListG">{% for c in cities %}<option value="{{ c }}"></option>{% endfor %}</datalist>
+      {% endcall %}
+
+      {# Business types (chips from category options available in inventory) #}
+      {% set cat_options_avail = [] %}
+      {% for opt in options.available %}
+        {% if opt.key == 'category.any' %}
+          {# no-op: chips are driven from cat_options below #}
+        {% endif %}
+      {% endfor %}
+      {% call ui.field('Business types', 'Click to add or type and press Enter. Leave empty for all types.') %}
+        <div id="guidedChipBox" class="flex min-h-[46px] flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-1.5 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25">
+          <input id="guidedChipInput" type="text" placeholder="Add a business type…"
+            class="min-w-[120px] flex-1 border-0 bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-ink-400">
+        </div>
+        {% if cat_options %}
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          {% for s in cat_options %}
+          <button type="button" data-cat="{{ s }}"
+            class="guided-cat-sug rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium capitalize text-ink-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">{{ s|replace('_',' ') }}</button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endcall %}
+
+      {# Lead quality #}
+      {% call ui.field('Lead quality', 'How selective to be. Higher = fewer but stronger leads.') %}
+        <div class="relative">
+          <select id="guidedScore"
+            class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-9 text-sm shadow-sm hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+            <option value="0">Any quality</option>
+            <option value="50" selected>Good matches (50+)</option>
+            <option value="70">Strong matches (70+)</option>
+            <option value="85">Only the best (85+)</option>
+          </select>
+          <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      {% endcall %}
+    </div>
+
+    {# ── ADVANCED panel ────────────────────────────────────────────────── #}
+    <div id="panelAdvanced" class="hidden rounded-xl border border-slate-200 bg-white shadow-card">
+      <div class="border-b border-slate-100 px-5 py-4">
+        <p class="text-[13px] text-ink-500">Every registered predicate. Conditions are combined with AND. Toggle "Exclude" to negate a condition.</p>
+      </div>
+
+      {# Group available predicates by group #}
+      {% set ns = namespace(prev_group='') %}
+      <div id="advConditions" class="px-5 py-4 space-y-3">
+        {# Each available predicate gets a condition row #}
+        {% for opt in options.available %}
+          {% if opt.group != ns.prev_group %}
+            {% set ns.prev_group = opt.group %}
+            <p class="pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400 first:pt-0">{{ opt.group|replace('_',' ')|title }}</p>
+          {% endif %}
+          <div class="adv-condition flex flex-wrap items-start gap-3 rounded-lg border border-slate-200 p-3"
+               data-key="{{ opt.key }}"
+               data-schema="{{ opt.params_schema | tojson }}">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-2">
+                <label class="flex items-center gap-2 text-sm font-medium text-ink-700 cursor-pointer">
+                  <input type="checkbox" class="adv-enable h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40" data-key="{{ opt.key }}">
+                  {{ opt.label }}
+                </label>
+                {% if opt.coverage_pct %}
+                  {% set cov_vals = opt.coverage_pct.values()|list %}
+                  {% if cov_vals %}
+                  <span class="text-[11px] text-ink-400">{{ (cov_vals|sum / cov_vals|length)|int }}% coverage</span>
+                  {% endif %}
+                {% endif %}
+              </div>
+              {# Render param inputs based on params_schema #}
+              <div class="adv-params ml-6 space-y-2 hidden">
+                {% for param_name, param_type in opt.params_schema.items() %}
+                  <div class="flex items-center gap-2">
+                    <label class="text-[12px] text-ink-600 w-20 shrink-0">{{ param_name }}</label>
+                    {% if param_type == 'int' %}
+                      <input type="number" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm w-28 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
+                             data-param="{{ param_name }}" placeholder="0">
+                    {% elif param_type == 'list[string]' %}
+                      <div class="flex-1">
+                        <div class="adv-chip-box flex min-h-[34px] flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm focus-within:border-brand-500"
+                             data-param="{{ param_name }}">
+                          <input class="adv-chip-input min-w-[80px] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-ink-400"
+                                 placeholder="type, press Enter…">
+                        </div>
+                        <input type="hidden" class="adv-param-input adv-chip-value" data-param="{{ param_name }}" value="">
+                      </div>
+                    {% else %}
+                      <input type="text" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm flex-1 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
+                             data-param="{{ param_name }}" placeholder="">
+                    {% endif %}
+                  </div>
+                {% endfor %}
+                {# Negate toggle #}
+                <label class="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer mt-1">
+                  <input type="checkbox" class="adv-negate h-3.5 w-3.5 rounded border-slate-300 text-red-500 focus:ring-red-400/40">
+                  Exclude (NOT) — invert this condition
+                </label>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {# Unavailable predicates #}
+      {% if options.unavailable %}
+      <div class="border-t border-slate-100 px-5 py-4">
+        <p class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Not available in current inventory</p>
+        <div class="space-y-2">
+          {% for opt in options.unavailable %}
+          <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 opacity-60">
+            <div class="flex-1 min-w-0">
+              <span class="text-sm font-medium text-ink-500">{{ opt.label }}</span>
+              <span class="ml-2 text-[11px] text-ink-400">{{ opt.group }}</span>
+            </div>
+            {% if opt.coverage_pct %}
+              {% set cov_vals = opt.coverage_pct.values()|list %}
+              {% if cov_vals %}
+              <span class="shrink-0 text-[11px] text-ink-400">{{ (cov_vals|sum / cov_vals|length)|int }}% coverage — not yet in inventory</span>
+              {% else %}
+              <span class="shrink-0 text-[11px] text-ink-400">Not available in current inventory</span>
+              {% endif %}
+            {% else %}
+              <span class="shrink-0 text-[11px] text-ink-400">Not available in current inventory</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── Save as Segment ───────────────────────────────────────────────── #}
+    <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
+      <h3 class="mb-3 text-sm font-semibold text-ink-700">Save as segment</h3>
+      <form method="post" action="/app/composer/save" id="saveForm" class="flex items-center gap-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <input type="hidden" name="composition" id="saveCompositionField" value="{}">
+        <input type="text" name="name" id="segmentName" placeholder="My audience segment"
+          class="flex-1 rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+        {{ ui.btn('Save segment', type='submit', extra='shrink-0') }}
+      </form>
+      <p class="mt-2 text-[12px] text-ink-400">Segments let you quickly re-run and compare audiences.</p>
+    </div>
+  </div>
+
+  <!-- ── Right: live estimate panel ────────────────────────────────────── -->
+  <div class="space-y-4">
+    <div class="rounded-xl border border-slate-200 bg-white shadow-card">
+      <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+        <span class="text-sm font-semibold text-ink-700">Live estimate</span>
+        <span id="estimateBadge" class="text-[12px] font-medium text-ink-400">—</span>
+      </div>
+
+      <div class="px-5 py-4 space-y-4">
+        {# Count #}
+        <div class="flex items-baseline gap-2">
+          <span id="estimateCount" class="text-3xl font-bold text-ink-900">—</span>
+          <span class="text-sm text-ink-500">leads match</span>
+        </div>
+
+        {# Score distribution #}
+        <div>
+          <p class="mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Score distribution</p>
+          <div class="space-y-1.5" id="scoreDist">
+            {% for band in ['85-100','70-84','50-69','0-49'] %}
+            <div class="flex items-center gap-2">
+              <span class="w-14 shrink-0 text-[11px] text-ink-500">{{ band }}</span>
+              <div class="flex-1 rounded-full bg-slate-100 h-2 overflow-hidden">
+                <div class="score-bar-{{ band|replace('-','_') }} h-full rounded-full bg-brand-500 transition-all duration-300" style="width:0%"></div>
+              </div>
+              <span class="w-8 shrink-0 text-right text-[11px] text-ink-500 score-val-{{ band|replace('-','_') }}">0</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Freshness distribution #}
+        <div>
+          <p class="mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Freshness</p>
+          <div class="space-y-1.5" id="freshDist">
+            {% for band, label in [('<=7','≤ 7 days'),('<=30','≤ 30 days'),('<=90','≤ 90 days'),('older','Older')] %}
+            <div class="flex items-center gap-2">
+              <span class="w-16 shrink-0 text-[11px] text-ink-500">{{ label }}</span>
+              <div class="flex-1 rounded-full bg-slate-100 h-2 overflow-hidden">
+                <div class="fresh-bar-{{ loop.index }} h-full rounded-full bg-emerald-400 transition-all duration-300" style="width:0%"></div>
+              </div>
+              <span class="w-8 shrink-0 text-right text-[11px] text-ink-500 fresh-val-{{ loop.index }}">0</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Estimate note #}
+        <p id="estimateNote" class="text-[11.5px] text-ink-400 leading-snug">Change filters to see a live count and sample leads.</p>
+      </div>
+    </div>
+
+    {# Sample cards #}
+    <div>
+      <p class="mb-3 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Sample leads (masked · ODbL)</p>
+      <div id="sampleCards" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1"></div>
+      <div id="sampleEmpty" class="hidden">
+        {{ ui.empty_state('No samples yet','Adjust your filters to see masked previews.',
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>') }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  /* ── State ────────────────────────────────────────────────────────────── */
+  let mode = 'guided';
+  let guidedCats = [];
+  let debounceTimer = null;
+
+  /* ── Mode toggle ─────────────────────────────────────────────────────── */
+  window.setMode = function (m) {
+    mode = m;
+    document.getElementById('panelGuided').classList.toggle('hidden', m !== 'guided');
+    document.getElementById('panelAdvanced').classList.toggle('hidden', m !== 'advanced');
+    document.getElementById('modeGuided').classList.toggle('bg-brand-600', m === 'guided');
+    document.getElementById('modeGuided').classList.toggle('text-white', m === 'guided');
+    document.getElementById('modeGuided').classList.toggle('text-ink-600', m !== 'guided');
+    document.getElementById('modeAdvanced').classList.toggle('bg-brand-600', m === 'advanced');
+    document.getElementById('modeAdvanced').classList.toggle('text-white', m === 'advanced');
+    document.getElementById('modeAdvanced').classList.toggle('text-ink-600', m !== 'advanced');
+    scheduleEstimate();
+  };
+
+  /* ── Guided: chips ───────────────────────────────────────────────────── */
+  const gBox = document.getElementById('guidedChipBox');
+  const gInput = document.getElementById('guidedChipInput');
+
+  function renderGuidedChips() {
+    gBox.querySelectorAll('.chip').forEach(c => c.remove());
+    guidedCats.forEach(cat => {
+      const el = document.createElement('span');
+      el.className = 'chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium capitalize text-brand-700 ring-1 ring-brand-100';
+      el.innerHTML = cat.replace(/_/g, ' ') + ' <button type="button" class="text-brand-500 hover:text-brand-800">&times;</button>';
+      el.querySelector('button').onclick = () => { guidedCats = guidedCats.filter(c => c !== cat); renderGuidedChips(); scheduleEstimate(); };
+      gBox.insertBefore(el, gInput);
+    });
+  }
+
+  function addGuidedCat(v) {
+    v = (v || '').trim().toLowerCase().replace(/\s+/g, '_');
+    if (v && !guidedCats.includes(v)) { guidedCats.push(v); }
+    gInput.value = '';
+    renderGuidedChips();
+    scheduleEstimate();
+  }
+
+  gInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addGuidedCat(gInput.value); }
+  });
+  document.querySelectorAll('.guided-cat-sug').forEach(b =>
+    b.addEventListener('click', () => addGuidedCat(b.dataset.cat))
+  );
+
+  /* ── Guided: other inputs ────────────────────────────────────────────── */
+  ['guidedCity', 'guidedScore'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', scheduleEstimate);
+    if (el) el.addEventListener('change', scheduleEstimate);
+  });
+
+  /* ── Advanced: enable/disable condition rows ─────────────────────────── */
+  document.querySelectorAll('.adv-enable').forEach(cb => {
+    cb.addEventListener('change', function () {
+      const row = this.closest('.adv-condition');
+      const params = row.querySelector('.adv-params');
+      params.classList.toggle('hidden', !this.checked);
+      scheduleEstimate();
+    });
+  });
+
+  /* ── Advanced: param inputs ──────────────────────────────────────────── */
+  document.querySelectorAll('.adv-param-input').forEach(inp => {
+    inp.addEventListener('input', scheduleEstimate);
+    inp.addEventListener('change', scheduleEstimate);
+  });
+
+  /* ── Advanced: chip inputs (list[string] params) ─────────────────────── */
+  document.querySelectorAll('.adv-chip-box').forEach(box => {
+    const inp = box.querySelector('.adv-chip-input');
+    const param = box.dataset.param;
+    const hidden = box.closest('.adv-params').querySelector(`.adv-chip-value[data-param="${param}"]`);
+    let chips = [];
+
+    function renderAdvChips() {
+      box.querySelectorAll('.adv-chip').forEach(c => c.remove());
+      chips.forEach(val => {
+        const el = document.createElement('span');
+        el.className = 'adv-chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 ring-1 ring-brand-100';
+        el.innerHTML = val + ' <button type="button" class="text-brand-500">&times;</button>';
+        el.querySelector('button').onclick = () => { chips = chips.filter(c => c !== val); renderAdvChips(); scheduleEstimate(); };
+        box.insertBefore(el, inp);
+      });
+      if (hidden) hidden.value = JSON.stringify(chips);
+    }
+
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const v = inp.value.trim().toLowerCase().replace(/\s+/g, '_');
+        if (v && !chips.includes(v)) { chips.push(v); }
+        inp.value = '';
+        renderAdvChips();
+        scheduleEstimate();
+      }
+    });
+  });
+
+  document.querySelectorAll('.adv-negate').forEach(cb =>
+    cb.addEventListener('change', scheduleEstimate)
+  );
+
+  /* ── Build composition JSON ──────────────────────────────────────────── */
+  function buildComposition() {
+    const nodes = [];
+    if (mode === 'guided') {
+      const city = (document.getElementById('guidedCity').value || '').trim();
+      const score = parseInt(document.getElementById('guidedScore').value || '0', 10);
+      if (city) {
+        nodes.push({ predicate: 'geo.city', params: { value: city }, negate: false });
+      }
+      if (guidedCats.length) {
+        nodes.push({ predicate: 'category.any', params: { in: guidedCats }, negate: false });
+      }
+      if (score > 0) {
+        nodes.push({ predicate: 'quality.min_score', params: { min: score }, negate: false });
+      }
+    } else {
+      // Advanced mode
+      document.querySelectorAll('.adv-condition').forEach(row => {
+        const cb = row.querySelector('.adv-enable');
+        if (!cb || !cb.checked) return;
+        const key = row.dataset.key;
+        const schema = JSON.parse(row.dataset.schema || '{}');
+        const params = {};
+        for (const [pname, ptype] of Object.entries(schema)) {
+          if (ptype === 'list[string]') {
+            const hiddenEl = row.querySelector(`.adv-chip-value[data-param="${pname}"]`);
+            try { params[pname] = hiddenEl ? JSON.parse(hiddenEl.value || '[]') : []; }
+            catch { params[pname] = []; }
+          } else if (ptype === 'int') {
+            const el = row.querySelector(`.adv-param-input[data-param="${pname}"]`);
+            params[pname] = el ? parseInt(el.value || '0', 10) : 0;
+          } else {
+            const el = row.querySelector(`.adv-param-input[data-param="${pname}"]`);
+            params[pname] = el ? (el.value || '') : '';
+          }
+        }
+        const negate = row.querySelector('.adv-negate')?.checked || false;
+        nodes.push({ predicate: key, params, negate });
+      });
+    }
+    return { op: 'AND', nodes };
+  }
+
+  /* ── Schedule estimate (debounced) ───────────────────────────────────── */
+  function scheduleEstimate() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(runEstimate, 350);
+  }
+
+  /* ── Run estimate ────────────────────────────────────────────────────── */
+  async function runEstimate() {
+    const composition = buildComposition();
+    // Update save form hidden field
+    document.getElementById('saveCompositionField').value = JSON.stringify(composition);
+    document.getElementById('estimateBadge').textContent = 'loading…';
+    try {
+      const res = await fetch('/app/composer/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ composition, sample: 9 })
+      });
+      if (!res.ok) { document.getElementById('estimateBadge').textContent = 'error'; return; }
+      const data = await res.json();
+      renderEstimate(data);
+    } catch (e) {
+      document.getElementById('estimateBadge').textContent = 'error';
+    }
+  }
+
+  /* ── Render estimate results ─────────────────────────────────────────── */
+  function renderEstimate(data) {
+    const count = data.count || 0;
+    document.getElementById('estimateCount').textContent = count.toLocaleString();
+    document.getElementById('estimateBadge').textContent = count === 0 ? 'no matches' : (count === 1 ? '1 lead' : count + ' leads');
+    document.getElementById('estimateNote').textContent =
+      count === 0 ? 'Try broadening your filters — no leads match the current composition.' :
+      'Masked previews below. Contact details unlocked per lead.';
+
+    // Score distribution bars
+    const sd = data.score_distribution || {};
+    const sdTotal = Object.values(sd).reduce((a, b) => a + b, 0) || 1;
+    [['85-100','85_100'],['70-84','70_84'],['50-69','50_69'],['0-49','0_49']].forEach(([k, cls]) => {
+      const v = sd[k] || 0;
+      const bar = document.querySelector(`.score-bar-${cls}`);
+      const val = document.querySelector(`.score-val-${cls}`);
+      if (bar) bar.style.width = (v / sdTotal * 100).toFixed(1) + '%';
+      if (val) val.textContent = v;
+    });
+
+    // Freshness distribution bars
+    const fd = data.freshness_distribution || {};
+    const fdTotal = Object.values(fd).reduce((a, b) => a + b, 0) || 1;
+    [['<=7',1],['<=30',2],['<=90',3],['older',4]].forEach(([k, idx]) => {
+      const v = fd[k] || 0;
+      const bar = document.querySelector(`.fresh-bar-${idx}`);
+      const val = document.querySelector(`.fresh-val-${idx}`);
+      if (bar) bar.style.width = (v / fdTotal * 100).toFixed(1) + '%';
+      if (val) val.textContent = v;
+    });
+
+    // Sample cards
+    const samples = data.samples || [];
+    const container = document.getElementById('sampleCards');
+    const empty = document.getElementById('sampleEmpty');
+    container.innerHTML = '';
+    if (!samples.length) {
+      empty.classList.remove('hidden');
+    } else {
+      empty.classList.add('hidden');
+      samples.forEach(s => container.appendChild(buildSampleCard(s)));
+    }
+  }
+
+  /* ── Build a masked sample card ──────────────────────────────────────── */
+  function buildSampleCard(s) {
+    const score = s.score_total || 0;
+    const scoreClass = score >= 70 ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-ink-600';
+    const cat = (s.category_keys && s.category_keys[0]) ? s.category_keys[0].replace(/_/g, ' ') : 'business';
+    const location = s.city || s.region || s.country || '—';
+    const source = s.source_type === 'open_data' ? 'OpenStreetMap' : (s.source_type || 'open_data');
+
+    const card = document.createElement('div');
+    card.className = 'group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card transition hover:border-slate-300 hover:shadow-pop';
+    card.innerHTML = `
+      <div class="flex items-start justify-between gap-2">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[13px] font-bold ${scoreClass}">${score}</span>
+        <span class="text-[11px] font-medium text-ink-400 text-right leading-tight">${source}<br>ODbL</span>
+      </div>
+      <div class="mt-3">
+        <p class="text-sm font-semibold capitalize text-ink-900">${cat}</p>
+        <p class="text-[13px] text-ink-500">${location}</p>
+      </div>
+      <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
+        ${s.has_phone ? '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">&#10003; Validated phone</span>' : ''}
+        ${s.has_email ? '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-slate-100 text-ink-600">Email</span>' : ''}
+        ${s.has_website ? '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-slate-100 text-ink-600">Website</span>' : ''}
+      </div>
+      ${s.reason ? `<p class="mt-2.5 line-clamp-2 text-[12.5px] leading-snug text-ink-500">${s.reason}</p>` : ''}
+      <div class="mt-auto border-t border-slate-100 pt-3 mt-3">
+        <span class="text-[12px] text-ink-400">Unlock to see contact details</span>
+      </div>
+    `;
+    return card;
+  }
+
+  /* ── Initial estimate on page load ──────────────────────────────────── */
+  scheduleEstimate();
+})();
+</script>
+{% endblock %}
