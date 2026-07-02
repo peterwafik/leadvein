@@ -53,7 +53,6 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
         "acked": bool(ba.compliance_ack_at)})
 
 
-@router.get("/marketplace")
 def _inventory_options(session: Session) -> dict:
     """Data-driven filter options: the cities and categories that ACTUALLY exist in
     inventory. Grows automatically as more is ingested — never a hardcoded list."""
@@ -64,6 +63,7 @@ def _inventory_options(session: Session) -> dict:
     return {"cities": sorted(set(cities)), "cat_options": sorted(set(cats))}
 
 
+@router.get("/marketplace")
 def marketplace_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
