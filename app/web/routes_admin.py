@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, Depends, Request, Form
 from sqlmodel import Session, select
 
@@ -109,7 +111,31 @@ def sources(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     rows = session.exec(select(LeadSource)).all()
-    adapter_statuses = adapter_registry.list_status(session)
+    adapter_statuses = list(adapter_registry.list_status(session))
+    # Surface urlscan.io and PublicWWW — the discovery sub-sources used by the
+    # fingerprint adapter — so operators can see rate limits and key status.
+    adapter_statuses += [
+        {
+            "key": "urlscan",
+            "name": "urlscan.io",
+            "type": "web_index",
+            "enabled": True,   # free tier; URLSCAN_KEY optional for higher limits
+            "terms_status": "permitted",
+            "free_tier": {},   # no absolute cap; rate-limited at 100 req/min
+            "used": 0,
+            "remaining": 0,
+        },
+        {
+            "key": "publicwww",
+            "name": "PublicWWW",
+            "type": "web_index",
+            "enabled": bool(os.getenv("PUBLICWWW_KEY")),
+            "terms_status": "permitted",
+            "free_tier": {},
+            "used": 0,
+            "remaining": 0,
+        },
+    ]
     return templates.TemplateResponse(request, "admin_sources.html", {
         "request": request, "user": u, "rows": rows,
         "adapter_statuses": adapter_statuses})
@@ -177,3 +203,85 @@ def audit_page(request: Request, session: Session = Depends(get_session)):
     rows = session.exec(select(AuditLog).order_by(AuditLog.id.desc())).all()[:200]
     return templates.TemplateResponse(request, "admin_audit.html", {
         "request": request, "user": u, "rows": rows})
+
+
+# ---------------------------------------------------------------------------
+# Fingerprint recipes — test + promote
+# ---------------------------------------------------------------------------
+
+def _recipes_by_category(session: Session) -> dict:
+    """Return all recipes grouped by category (dict: category -> list[row])."""
+    from app.fingerprints.library import list_recipes as _list
+    recipes = _list(session)
+    by_cat: dict = {}
+    for r in recipes:
+        by_cat.setdefault(r.category, []).append(r)
+    return by_cat
+
+
+@router.get("/recipes")
+def recipes_page(request: Request, session: Session = Depends(get_session)):
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    return templates.TemplateResponse(request, "admin_recipes.html", {
+        "request": request, "user": u,
+        "by_category": _recipes_by_category(session),
+        "test_result": None,
+        "csrf": ensure_csrf(request),
+    })
+
+
+@router.post("/recipes/{recipe_key}/test", dependencies=[Depends(csrf_protect)])
+def recipe_test(
+    request: Request,
+    recipe_key: str,
+    session: Session = Depends(get_session),
+):
+    """Run a precision test on a recipe using the real engine discover/fetch."""
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+
+    from app.fingerprints.library import test_recipe as _test_recipe
+    from app.engine.discover import discover as engine_discover
+    from app.engine.enrich import fetch as engine_fetch
+
+    def _discover(recipe):
+        return engine_discover(recipe, source="urlscan", limit=5)
+
+    result = _test_recipe(
+        session, recipe_key,
+        discover_fn=_discover,
+        fetch_fn=engine_fetch,
+        n=5,
+    )
+    audit(session, u.id, "test_recipe", "FingerprintRecipe", recipe_key,
+          {"tested": result["tested"], "matched": result["matched"],
+           "precision": result["precision"]})
+
+    return templates.TemplateResponse(request, "admin_recipes.html", {
+        "request": request, "user": u,
+        "by_category": _recipes_by_category(session),
+        "test_result": result,
+        "csrf": ensure_csrf(request),
+    })
+
+
+@router.post("/recipes/{recipe_key}/promote", dependencies=[Depends(csrf_protect)])
+def recipe_promote(
+    request: Request,
+    recipe_key: str,
+    session: Session = Depends(get_session),
+):
+    """Enable (promote) a recipe after a passing precision test."""
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+
+    from app.fingerprints.library import promote_recipe
+    row = promote_recipe(session, recipe_key)
+    if row:
+        audit(session, u.id, "promote_recipe", "FingerprintRecipe", recipe_key,
+              {"enabled": True})
+    return redirect("/admin/recipes")

@@ -4,6 +4,13 @@
 {% block body %}
 {{ ui.page_intro('Data sources', 'All configured data source adapters and their compliance status. Each source must have accepted terms before leads can be ingested from it.') }}
 
+{# ── Fingerprint recipes shortcut ─────────────────────────────────────────── #}
+<div class="mb-5 flex items-center gap-3">
+  {{ ui.btn('Fingerprint Recipes', href='/admin/recipes', kind='secondary',
+     icon='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>') }}
+  <span class="text-[13px] text-ink-500">Test and promote greyed low-confidence recipes before bulk runs.</span>
+</div>
+
 {# ── US outreach hold-gate banner ─────────────────────────────────────────── #}
 {{ ui.banner('<strong>US outreach: HELD pending DNC/TCPA gate</strong> — US leads are not sold. All leads with a US region are blocked at search, preview, and unlock until DNC/TCPA clearance is implemented.', 'warn') }}
 
