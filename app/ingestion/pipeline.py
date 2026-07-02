@@ -53,13 +53,14 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
         ctx = _lead_context(n, enrichment)
         scored = score(ctx, profile)
         addr = n.address or {}
+        _country = addr.get("country") or query.country or ""  # OSM tag wins, else pull context
         _val = build_validation({
             "email": n.public_email, "phone": n.phone,
-            "country": addr.get("country", ""),
+            "country": _country,
             "address": {"line1": addr.get("line1", ""),
                         "city": addr.get("city", ""),
                         "postal_code": addr.get("postal_code", ""),
-                        "country": addr.get("country", ""),
+                        "country": _country,
                         "lat": addr.get("lat"), "lon": addr.get("lon")},
             "intent": enrichment, "name": n.business_name, "category_keys": n.category_keys,
             "city": addr.get("city", ""), "opening_hours": n.opening_hours,
@@ -69,7 +70,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             category_keys_json=json.dumps(n.category_keys),
             address_line1=addr.get("line1", ""), city=addr.get("city", ""),
             region=addr.get("region", ""), postal_code=addr.get("postal_code", ""),
-            country=addr.get("country") or query.country or "", latitude=addr.get("lat"),
+            country=_country, latitude=addr.get("lat"),
             longitude=addr.get("lon"), phone=n.phone, public_email=n.public_email,
             website_url=n.website_url,
             attributes_json=json.dumps({**n.attributes, **enrichment}),
