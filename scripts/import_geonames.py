@@ -21,7 +21,6 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 BASE = "https://download.geonames.org/export/dump/"
-FIXTURE_COUNTRIES = None  # None = all
 FIXTURE_CITY_COUNTRIES = {"GB", "US", "DE", "FR", "IE"}   # fixture keeps cities small
 
 
@@ -49,33 +48,29 @@ def _rows():
                "country_name": c["name"], "admin1_name": "", "admin2_name": "",
                "name": c["name"], "ascii_name": c["name"], "population": c["population"]}
 
-    admin1 = {}   # "GB.ENG" -> "England"
+    # admin1[key] = {"name": ..., "geoname_id": ...}  e.g. "GB.ENG" -> England
+    admin1 = {}
     for line in _fetch("admin1CodesASCII.txt").splitlines():
         p = line.split("\t")
-        if len(p) >= 2:
-            admin1[p[0]] = p[1]
-    admin2 = {}   # "GB.ENG.K2" -> "Oxfordshire"
+        if len(p) >= 4:
+            admin1[p[0]] = {"name": p[1], "geoname_id": int(p[3].strip() or 0)}
+        elif len(p) >= 2:
+            admin1[p[0]] = {"name": p[1], "geoname_id": 0}
+    # admin2[key] = {"name": ..., "geoname_id": ...}  e.g. "GB.ENG.K2" -> Oxfordshire
+    admin2 = {}
     for line in _fetch("admin2Codes.txt").splitlines():
         p = line.split("\t")
-        if len(p) >= 2:
-            admin2[p[0]] = p[1]
+        if len(p) >= 4:
+            admin2[p[0]] = {"name": p[1], "geoname_id": int(p[3].strip() or 0)}
+        elif len(p) >= 2:
+            admin2[p[0]] = {"name": p[1], "geoname_id": 0}
 
-    for key, name in sorted(admin1.items()):
-        cc = key.split(".")[0]
-        if cc not in countries:
-            continue
-        yield {"kind": "region", "geoname_id": 0, "country_code": cc,
-               "country_name": countries[cc]["name"], "admin1_name": name,
-               "admin2_name": "", "name": name, "ascii_name": name, "population": 0}
-    for key, name in sorted(admin2.items()):
-        cc = key.split(".")[0]
-        if cc not in countries:
-            continue
-        a1 = admin1.get(".".join(key.split(".")[:2]), "")
-        yield {"kind": "region", "geoname_id": 0, "country_code": cc,
-               "country_name": countries[cc]["name"], "admin1_name": a1,
-               "admin2_name": name, "name": name, "ascii_name": name, "population": 0}
-
+    # Buffer city rows and accumulate per-region population sums before yielding
+    # region rows. Region population = sum of city populations in that division
+    # (approximate ranking weight — not an official census figure).
+    admin1_pop: dict[str, int] = {}
+    admin2_pop: dict[str, int] = {}
+    city_rows = []
     for line in _fetch("cities1000.zip").splitlines():
         p = line.split("\t")
         if len(p) < 15:
@@ -83,12 +78,37 @@ def _rows():
         cc = p[8]
         if cc not in countries:
             continue
-        a1 = admin1.get(f"{cc}.{p[10]}", "")
-        a2 = admin2.get(f"{cc}.{p[10]}.{p[11]}", "")
-        yield {"kind": "city", "geoname_id": int(p[0]), "country_code": cc,
+        a1key = f"{cc}.{p[10]}"
+        a2key = f"{cc}.{p[10]}.{p[11]}"
+        pop = int(p[14] or 0)
+        admin1_pop[a1key] = admin1_pop.get(a1key, 0) + pop
+        admin2_pop[a2key] = admin2_pop.get(a2key, 0) + pop
+        a1 = admin1.get(a1key, {}).get("name", "")
+        a2 = admin2.get(a2key, {}).get("name", "")
+        city_rows.append({"kind": "city", "geoname_id": int(p[0]), "country_code": cc,
+                          "country_name": countries[cc]["name"], "admin1_name": a1,
+                          "admin2_name": a2, "name": p[1], "ascii_name": p[2],
+                          "population": pop})
+
+    for key, info in sorted(admin1.items()):
+        cc = key.split(".")[0]
+        if cc not in countries:
+            continue
+        yield {"kind": "region", "geoname_id": info["geoname_id"], "country_code": cc,
+               "country_name": countries[cc]["name"], "admin1_name": info["name"],
+               "admin2_name": "", "name": info["name"], "ascii_name": info["name"],
+               "population": admin1_pop.get(key, 0)}
+    for key, info in sorted(admin2.items()):
+        cc = key.split(".")[0]
+        if cc not in countries:
+            continue
+        a1 = admin1.get(".".join(key.split(".")[:2]), {}).get("name", "")
+        yield {"kind": "region", "geoname_id": info["geoname_id"], "country_code": cc,
                "country_name": countries[cc]["name"], "admin1_name": a1,
-               "admin2_name": a2, "name": p[1], "ascii_name": p[2],
-               "population": int(p[14] or 0)}
+               "admin2_name": info["name"], "name": info["name"], "ascii_name": info["name"],
+               "population": admin2_pop.get(key, 0)}
+
+    yield from city_rows
 
 
 def main() -> None:
