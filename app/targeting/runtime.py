@@ -5,6 +5,7 @@ from app.targeting.predicates import geo, quality, category, contactability, web
 
 def register_targeting_runtime() -> None:
     for p in (geo.GEO_COUNTRY, geo.GEO_REGION, geo.GEO_CITY,
+              geo.GEO_CITY_ANY, geo.GEO_REGION_ANY, geo.GEO_COUNTRY_ANY,
               quality.MIN_SCORE, quality.VERIFIED_WITHIN, quality.SOURCE_TYPE,
               category.CATEGORY_ANY,
               contactability.HAS_PHONE, contactability.HAS_ROLE_EMAIL,
