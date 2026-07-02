@@ -73,6 +73,13 @@
         <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Find leads</p>
         {{ nav('/app','Dashboard', ic.home) }}
         {{ nav('/app/marketplace','Marketplace', ic.target) }}
+        {% set camp_active = p.startswith('/app/campaign') %}
+        <a href="/app/campaign-preview" class="group flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition
+          {{ 'bg-brand-50 text-brand-700' if camp_active else 'text-ink-600 hover:bg-slate-100 hover:text-ink-900' }}">
+          <span class="shrink-0 {{ 'text-brand-600' if camp_active else 'text-ink-400 group-hover:text-ink-600' }}">{{ ic.flame|safe }}</span>
+          <span>Campaigns</span>
+          <span class="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Preview</span>
+        </a>
         {{ nav('/app/recipes','Saved searches', ic.grid) }}
         <p class="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Manage</p>
         {{ nav('/app/purchased','Purchased leads', ic.inbox) }}

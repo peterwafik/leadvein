@@ -62,6 +62,18 @@ def marketplace_page(request: Request, session: Session = Depends(get_session)):
         "request": request, "user": u, "results": None, "csrf": ensure_csrf(request)})
 
 
+@router.get("/campaign-preview")
+def campaign_preview(request: Request, session: Session = Depends(get_session)):
+    # DESIGN PREVIEW ONLY — the Campaign layer + Targeting v2 predicate catalog are
+    # approved specs, not yet built. This route renders a static click-through of the
+    # TARGET UX so it can be reacted to; it wires to no engine.
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    return templates.TemplateResponse(request, "campaign_preview.html", {
+        "request": request, "user": u, "csrf": ensure_csrf(request)})
+
+
 @router.post("/marketplace/search", dependencies=[Depends(csrf_protect)])
 async def marketplace_search(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
@@ -73,7 +85,8 @@ async def marketplace_search(request: Request, session: Session = Depends(get_se
     est = estimate(session, u.buyer_account_id, filters)
     return templates.TemplateResponse(request, "marketplace.html", {
         "request": request, "user": u, "results": results, "estimate": est,
-        "credits": balance(session, u.buyer_account_id), "csrf": ensure_csrf(request)})
+        "filters": filters, "credits": balance(session, u.buyer_account_id),
+        "csrf": ensure_csrf(request)})
 
 
 @router.post("/unlock/{lead_id}", dependencies=[Depends(csrf_protect)])
