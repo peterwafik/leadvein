@@ -17,7 +17,7 @@ from app.core.purchasing import (unlock_lead, balance, InsufficientCredits,
 from app.core.recipes import DEFAULT_FILTERS
 from app.core.targeting.segments import (create_segment, list_segments,
                                          get_owned, delete_segment)
-from app.web.csrf import ensure_csrf, csrf_protect
+from app.web.csrf import ensure_csrf, csrf_protect, csrf_protect_json
 from app.web.deps import templates, get_session, current_user, redirect
 
 router = APIRouter(prefix="/app")
@@ -73,6 +73,18 @@ def marketplace_page(request: Request, session: Session = Depends(get_session)):
     return templates.TemplateResponse(request, "marketplace.html", {
         "request": request, "user": u, "results": None, "csrf": ensure_csrf(request),
         **_inventory_options(session)})
+
+
+@router.get("/campaigns")
+def campaigns_page(request: Request, session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    from app.campaigns.crud import list_active
+    campaigns = list_active(session)
+    return templates.TemplateResponse(request, "campaigns.html", {
+        "request": request, "user": u, "campaigns": campaigns,
+        "csrf": ensure_csrf(request)})
 
 
 @router.get("/campaign-preview")
@@ -240,6 +252,15 @@ def composer_page(request: Request, session: Session = Depends(get_session)):
                 ctx["preset"] = seg.composition_json
         except (ValueError, TypeError):
             pass
+    campaign_key = request.query_params.get("campaign")
+    if campaign_key:
+        from app.campaigns.crud import get_by_key as get_campaign_by_key
+        campaign = get_campaign_by_key(session, campaign_key)
+        if campaign:
+            ctx["campaign"] = campaign
+            ctx["campaign_param_schema"] = json.loads(campaign.param_schema)
+            audit(session, u.id, "campaign.select", "Campaign", campaign_key,
+                  {"key": campaign_key, "phase": "page_load"})
     return templates.TemplateResponse(request, "composer.html", ctx)
 
 
@@ -251,11 +272,12 @@ async def composer_save(request: Request, session: Session = Depends(get_session
     form = await request.form()
     name = form.get("name", "").strip() or "Untitled segment"
     composition_raw = form.get("composition", "{}")
+    origin_key = form.get("origin_key", "") or ""
     try:
         composition = json.loads(composition_raw)
     except (json.JSONDecodeError, TypeError):
         composition = {"op": "AND", "nodes": []}
-    create_segment(session, u.buyer_account_id, name, composition)
+    create_segment(session, u.buyer_account_id, name, composition, origin_key=origin_key)
     return redirect("/app/segments")
 
 
@@ -280,6 +302,38 @@ def segment_delete(request: Request, segment_id: int,
     return redirect("/app/segments")
 
 
+@router.post("/composer/apply-campaign", dependencies=[Depends(csrf_protect_json)])
+async def composer_apply_campaign(request: Request, session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return Response(status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return Response(status_code=400)
+    key = body.get("key", "")
+    params = body.get("params") or {}
+    from app.campaigns.crud import get_by_key as get_campaign_by_key
+    campaign = get_campaign_by_key(session, key)
+    if not campaign:
+        return Response(status_code=404)
+    from app.campaigns.compile import compile_campaign
+    result = compile_campaign(campaign, params)
+    # Audit with campaign key + composition hash for traceability
+    import hashlib
+    comp_hash = hashlib.sha256(
+        json.dumps(result["composition"], sort_keys=True).encode()
+    ).hexdigest()[:16]
+    audit(session, u.id, "campaign.select", "Campaign", key,
+          {"key": key, "composition_hash": comp_hash})
+    from fastapi.responses import JSONResponse
+    return JSONResponse({
+        "composition": result["composition"],
+        "quality_profile_key": result["quality_profile_key"],
+        "gated_notices": result["gated_notices"],
+    })
+
+
 @router.post("/composer/estimate")
 async def composer_estimate(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
@@ -290,10 +344,19 @@ async def composer_estimate(request: Request, session: Session = Depends(get_ses
     except Exception:
         return Response(status_code=400)
     composition = body.get("composition") or {"op": "AND", "nodes": []}
+    quality_profile_key = body.get("quality_profile_key", "") or ""
+    ctx = None
+    if quality_profile_key:
+        try:
+            from app.quality.profiles.registry import get as get_quality_profile
+            prof = get_quality_profile(quality_profile_key)
+            ctx = {"quality_profile": prof}
+        except KeyError:
+            pass  # Unknown key → baseline only, never 500
     from app.core.targeting.estimate import estimate as targeting_estimate
     try:
         est = targeting_estimate(session, u.buyer_account_id, composition,
-                                 sample=int(body.get("sample", 9)))
+                                 sample=int(body.get("sample", 9)), ctx=ctx)
     except (ValueError, KeyError, TypeError):
         return Response(status_code=400)
     return est

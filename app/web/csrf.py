@@ -25,3 +25,11 @@ async def csrf_protect(request: Request) -> None:
     form = await request.form()
     if not csrf_ok(request, form.get("csrf_token", "")):
         raise HTTPException(status_code=403, detail="CSRF token invalid")
+
+
+async def csrf_protect_json(request: Request) -> None:
+    """FastAPI dependency for JSON POST routes that cannot carry a form body.
+    Reads the CSRF token from the ``X-CSRF-Token`` request header."""
+    token = request.headers.get("X-CSRF-Token", "")
+    if not csrf_ok(request, token):
+        raise HTTPException(status_code=403, detail="CSRF token invalid")

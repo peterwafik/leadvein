@@ -7,6 +7,71 @@
 {{ ui.page_intro('Build your audience',
    'Define exactly who you want to target. Guided mode covers the most common filters; Advanced mode exposes every registered predicate. Results update live as you build — masked previews only, ODbL-licensed.') }}
 
+{# ── Campaign banner + param panel (rendered only when loaded via ?campaign=) ── #}
+{% if campaign is defined and campaign %}
+<div id="campaignPanel" class="mb-6 rounded-xl border border-brand-200 bg-brand-50 p-5 shadow-card space-y-4">
+  <div class="flex items-start gap-3">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-100 text-brand-700">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/></svg>
+    </span>
+    <div class="min-w-0 flex-1">
+      <p class="text-sm font-semibold text-brand-800">Compiled from campaign: <span class="text-brand-700">{{ campaign.name }}</span></p>
+      <p class="text-[12.5px] text-brand-600 mt-0.5">{{ campaign.description }}</p>
+    </div>
+    <a href="/app/campaigns" class="shrink-0 text-[12px] font-medium text-brand-600 hover:text-brand-800 hover:underline">← Back to campaigns</a>
+  </div>
+
+  {# Campaign param inputs #}
+  <div class="space-y-3" id="campaignParams">
+    {% for param_key, param_def in campaign_param_schema.items() %}
+      {% set p_type = param_def.type if param_def is mapping and param_def.type is defined else 'text' %}
+      {% set p_label = param_def.label if param_def is mapping and param_def.label is defined else param_key %}
+      {% set p_help = param_def.help if param_def is mapping and param_def.help is defined else '' %}
+
+      {% if p_type == 'city' %}
+        {% call ui.field(p_label, p_help) %}
+          <input type="text" id="campaignParam_{{ param_key }}" data-param="{{ param_key }}" data-ptype="{{ p_type }}"
+            placeholder="e.g. Oxford" list="cityListCamp{{ loop.index }}" autocomplete="off"
+            class="w-full rounded-lg border border-brand-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+          <datalist id="cityListCamp{{ loop.index }}">{% for c in cities %}<option value="{{ c }}"></option>{% endfor %}</datalist>
+        {% endcall %}
+
+      {% elif p_type == 'list' %}
+        {% call ui.field(p_label, p_help) %}
+          <div id="campaignChipBox_{{ param_key }}" data-param="{{ param_key }}" data-ptype="{{ p_type }}"
+            class="flex min-h-[46px] flex-wrap items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-2 py-1.5 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25">
+            <input id="campaignChipInput_{{ param_key }}" type="text" placeholder="Add a type, press Enter…"
+              class="min-w-[120px] flex-1 border-0 bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-ink-400">
+          </div>
+          <input type="hidden" id="campaignParamHidden_{{ param_key }}" data-param="{{ param_key }}" value="[]">
+        {% endcall %}
+
+      {% else %}
+        {% call ui.field(p_label, p_help) %}
+          <input type="text" id="campaignParam_{{ param_key }}" data-param="{{ param_key }}" data-ptype="{{ p_type }}"
+            class="w-full rounded-lg border border-brand-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+        {% endcall %}
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <div class="flex items-center gap-3">
+    <button id="applyBtn" type="button"
+      class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 active:translate-y-px focus-visible:ring-2 focus-visible:ring-brand-500/40">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/></svg>
+      Apply campaign targeting
+    </button>
+    <span id="applyStatus" class="text-[12.5px] text-ink-400 hidden"></span>
+  </div>
+</div>
+
+{# Gated notices — shown after apply if campaign has licensed-source requirements #}
+<div id="gatedNoticesPanel" class="hidden mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-card">
+  <p class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-amber-700">Requires a licensed source — not included</p>
+  <div id="gatedNoticesList" class="space-y-2"></div>
+</div>
+{% endif %}
+
 {# ── Mode toggle ───────────────────────────────────────────────────────── #}
 <div class="mb-6 flex items-center gap-3">
   <span class="text-sm font-medium text-ink-700">Mode:</span>
@@ -171,6 +236,7 @@
       <form method="post" action="/app/composer/save" id="saveForm" class="flex items-center gap-3">
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <input type="hidden" name="composition" id="saveCompositionField" value="{}">
+        <input type="hidden" name="origin_key" id="saveOriginKeyField" value="{{ campaign.key if campaign is defined and campaign else '' }}">
         <input type="text" name="name" id="segmentName" placeholder="My audience segment"
           class="flex-1 rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
         {{ ui.btn('Save segment', type='submit', extra='shrink-0') }}
@@ -249,6 +315,9 @@ window._segmentPreset = {{ preset | safe }};
 {% else %}
 window._segmentPreset = null;
 {% endif %}
+// Campaign meta injected by the server (null when no ?campaign= param)
+window._campaignKey = {{ ('"' ~ campaign.key ~ '"') | safe if campaign is defined and campaign else 'null' }};
+window._csrfToken = {{ ('"' ~ csrf ~ '"') | safe }};
 </script>
 <script>
 (function () {
@@ -256,6 +325,7 @@ window._segmentPreset = null;
   let mode = 'guided';
   let guidedCats = [];
   let debounceTimer = null;
+  let _qualityProfileKey = '';  // set by apply-campaign, threaded into estimate
 
   /* ── Mode toggle ─────────────────────────────────────────────────────── */
   window.setMode = function (m) {
@@ -415,10 +485,12 @@ window._segmentPreset = null;
     document.getElementById('saveCompositionField').value = JSON.stringify(composition);
     document.getElementById('estimateBadge').textContent = 'loading…';
     try {
+      const payload = { composition, sample: 9 };
+      if (_qualityProfileKey) payload.quality_profile_key = _qualityProfileKey;
       const res = await fetch('/app/composer/estimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ composition, sample: 9 })
+        body: JSON.stringify(payload)
       });
       if (!res.ok) { document.getElementById('estimateBadge').textContent = 'error'; return; }
       const data = await res.json();
@@ -504,22 +576,163 @@ window._segmentPreset = null;
     return card;
   }
 
+  /* ── Render gated notices (licensed-source rows, visually distinct from coverage-0%) ── */
+  function renderGatedNotices(notices) {
+    const panel = document.getElementById('gatedNoticesPanel');
+    const list = document.getElementById('gatedNoticesList');
+    if (!panel || !list) return;
+    list.innerHTML = '';
+    if (!notices || !notices.length) { panel.classList.add('hidden'); return; }
+    panel.classList.remove('hidden');
+    notices.forEach(function (n) {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-3 rounded-lg border border-amber-300 bg-white px-3.5 py-2.5';
+      row.innerHTML =
+        '<svg class="shrink-0 text-amber-600" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>' +
+        '<span class="flex-1 text-sm text-ink-700">' + n.path + '</span>' +
+        '<span class="shrink-0 text-[12px] font-medium text-amber-700">Requires a licensed source</span>';
+      list.appendChild(row);
+    });
+  }
+
+  /* ── Collect campaign param values ──────────────────────────────────── */
+  function getCampaignParams() {
+    const params = {};
+    const panel = document.getElementById('campaignParams');
+    if (!panel) return params;
+    // text/city inputs
+    panel.querySelectorAll('input[data-param]').forEach(function (el) {
+      const ptype = el.dataset.ptype;
+      if (ptype === 'city' || (ptype !== 'list' && !el.id.startsWith('campaignChipInput'))) {
+        if (el.value && el.value.trim()) {
+          params[el.dataset.param] = el.value.trim();
+        }
+      }
+    });
+    // list hidden inputs
+    panel.querySelectorAll('input[type="hidden"][data-param]').forEach(function (el) {
+      if (el.id && el.id.startsWith('campaignParamHidden_')) {
+        try {
+          const vals = JSON.parse(el.value || '[]');
+          if (vals.length) params[el.dataset.param] = vals;
+        } catch (e) {}
+      }
+    });
+    return params;
+  }
+
+  /* ── Apply campaign (fetch + rehydrate) ─────────────────────────────── */
+  const applyBtn = document.getElementById('applyBtn');
+  if (applyBtn && window._campaignKey) {
+    // Wire up chip boxes for list-type params
+    document.querySelectorAll('[id^="campaignChipBox_"]').forEach(function (box) {
+      const param = box.dataset.param;
+      const inp = box.querySelector('[id^="campaignChipInput_"]');
+      const hidden = document.getElementById('campaignParamHidden_' + param);
+      let chips = [];
+
+      function renderCampChips() {
+        box.querySelectorAll('.camp-chip').forEach(function (c) { c.remove(); });
+        chips.forEach(function (val) {
+          const el = document.createElement('span');
+          el.className = 'camp-chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-700 ring-1 ring-brand-100';
+          el.innerHTML = val.replace(/_/g, ' ') + ' <button type="button" class="text-brand-500 hover:text-brand-800">&times;</button>';
+          el.querySelector('button').onclick = function () {
+            chips = chips.filter(function (c) { return c !== val; });
+            renderCampChips();
+          };
+          box.insertBefore(el, inp);
+        });
+        if (hidden) hidden.value = JSON.stringify(chips);
+      }
+
+      if (inp) {
+        inp.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            var v = inp.value.trim().toLowerCase().replace(/\s+/g, '_');
+            if (v && !chips.includes(v)) { chips.push(v); }
+            inp.value = '';
+            renderCampChips();
+          }
+        });
+      }
+    });
+
+    applyBtn.addEventListener('click', async function () {
+      const params = getCampaignParams();
+      const statusEl = document.getElementById('applyStatus');
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Applying…';
+      if (statusEl) { statusEl.textContent = ''; statusEl.classList.add('hidden'); }
+
+      try {
+        const res = await fetch('/app/composer/apply-campaign', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': window._csrfToken || ''
+          },
+          body: JSON.stringify({ key: window._campaignKey, params: params })
+        });
+        if (!res.ok) {
+          if (statusEl) { statusEl.textContent = 'Failed to apply campaign (' + res.status + ')'; statusEl.classList.remove('hidden'); }
+          return;
+        }
+        const data = await res.json();
+
+        // Stash quality_profile_key for the estimate endpoint
+        _qualityProfileKey = data.quality_profile_key || '';
+
+        // Update origin_key hidden field in the save form
+        const originField = document.getElementById('saveOriginKeyField');
+        if (originField) originField.value = window._campaignKey;
+
+        // Render gated notices (visually distinct from "not available in inventory")
+        renderGatedNotices(data.gated_notices || []);
+
+        // Rehydrate the composition into the composer UI (reuse preset logic)
+        if (data.composition && typeof data.composition === 'object') {
+          window._segmentPreset = data.composition;
+          _loadCompositionPreset(data.composition);
+        }
+
+        if (statusEl) { statusEl.textContent = 'Campaign targeting applied.'; statusEl.classList.remove('hidden'); }
+      } catch (err) {
+        if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.classList.remove('hidden'); }
+      } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply campaign targeting';
+      }
+    });
+  }
+
   /* ── Load saved segment preset (if any) then run initial estimate ────── */
-  (function _loadSegmentPreset() {
-    const p = window._segmentPreset;
+  function _loadCompositionPreset(p) {
     if (!p || typeof p !== 'object' || !Array.isArray(p.nodes) || !p.nodes.length) {
       scheduleEstimate();
       return;
     }
+    // Reset guided state
+    guidedCats = [];
+    const cityEl = document.getElementById('guidedCity');
+    const scoreEl = document.getElementById('guidedScore');
+    if (cityEl) cityEl.value = '';
+    if (scoreEl) scoreEl.value = '0';
+    // Uncheck all advanced conditions
+    document.querySelectorAll('.adv-enable').forEach(function (cb) {
+      cb.checked = false;
+      const row = cb.closest('.adv-condition');
+      if (row) { const pd = row.querySelector('.adv-params'); if (pd) pd.classList.add('hidden'); }
+    });
+
     let needAdvanced = false;
     p.nodes.forEach(function (node) {
       if (!node || !node.predicate) return;
       if (node.predicate === 'geo.city') {
-        const el = document.getElementById('guidedCity');
-        if (el) el.value = (node.params && node.params.value) || '';
+        if (cityEl) cityEl.value = (node.params && node.params.value) || '';
       } else if (node.predicate === 'quality.min_score') {
-        const el = document.getElementById('guidedScore');
-        if (el) el.value = String((node.params && node.params.min) || 0);
+        if (scoreEl) scoreEl.value = String((node.params && node.params.min) || 0);
       } else if (node.predicate === 'category.any') {
         const cats = (node.params && Array.isArray(node.params.in)) ? node.params.in : [];
         cats.forEach(function (cat) {
@@ -543,6 +756,7 @@ window._segmentPreset = null;
             const chipBox = row.querySelector('.adv-chip-box[data-param="' + pname + '"]');
             if (chipBox) {
               const chipInp = chipBox.querySelector('.adv-chip-input');
+              chipBox.querySelectorAll('.adv-chip').forEach(function (c) { c.remove(); });
               vals.forEach(function (val) {
                 const el = document.createElement('span');
                 el.className = 'adv-chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 ring-1 ring-brand-100';
@@ -574,6 +788,11 @@ window._segmentPreset = null;
     renderGuidedChips();
     if (needAdvanced) setMode('advanced');
     scheduleEstimate();
+  }
+
+  (function _loadSegmentPreset() {
+    const p = window._segmentPreset;  // read-back: _loadCompositionPreset consumes this
+    _loadCompositionPreset(p);
   })();
 })();
 </script>
