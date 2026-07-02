@@ -13,6 +13,10 @@ class SourceMeta:
     license: str
     terms_status: str = "permitted"
     regions: list = field(default_factory=lambda: ["*"])
+    # Enrichment adapter fields — defaulted so existing adapters are unaffected.
+    key_env: str = ""
+    free_tier: dict = field(default_factory=dict)
+    rate_limit: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -47,3 +51,19 @@ class LeadSourceAdapter(Protocol):
     def discover(self, query: AdapterQuery) -> Iterable[dict]: ...
     def normalize(self, raw: dict) -> "NormalizedLead | None": ...
     def attribution(self) -> str: ...
+
+
+@dataclass
+class FieldContribution:
+    """A single field enriched by an EnrichmentAdapter."""
+    field: str
+    value: object
+    license: str
+    confidence: float = 1.0
+
+
+@runtime_checkable
+class EnrichmentAdapter(Protocol):
+    meta: SourceMeta
+
+    def enrich(self, view: dict) -> list[FieldContribution]: ...
