@@ -69,7 +69,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             category_keys_json=json.dumps(n.category_keys),
             address_line1=addr.get("line1", ""), city=addr.get("city", ""),
             region=addr.get("region", ""), postal_code=addr.get("postal_code", ""),
-            country=addr.get("country", ""), latitude=addr.get("lat"),
+            country=addr.get("country") or query.country or "", latitude=addr.get("lat"),
             longitude=addr.get("lon"), phone=n.phone, public_email=n.public_email,
             website_url=n.website_url,
             attributes_json=json.dumps({**n.attributes, **enrichment}),

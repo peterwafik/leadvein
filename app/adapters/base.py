@@ -21,6 +21,7 @@ class AdapterQuery:
     categories: list
     limit: int = 100
     extra: dict = field(default_factory=dict)
+    country: str = ""
 
 
 @dataclass
