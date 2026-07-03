@@ -28,15 +28,6 @@ def dedupe_key(lead: NormalizedLead) -> str:
     return f"name:{_slug(lead.business_name)}|{_slug(city)}"
 
 
-def name_city_fallback_key(business_name: str, city: str) -> str:
-    """Return the name+city fallback dedup key.
-
-    Used in merge_or_create so that a richer-keyed incoming record (phone/domain)
-    can still find an existing record that was keyed by name+city only.
-    """
-    return f"name:{_slug(business_name)}|{_slug(city)}"
-
-
 def find_existing(session: Session, key: str) -> Lead | None:
     if not key:
         return None

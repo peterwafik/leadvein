@@ -9,7 +9,7 @@ from app.adapters.budget import stamp_provenance
 from app.core.compliance import host_of, is_opted_out, audit
 from app.core.db import Lead, IngestionJob, _now
 from app.core.retention import expiry_for
-from app.core.dedup import dedupe_key, find_existing, name_city_fallback_key
+from app.core.dedup import dedupe_key, find_existing
 from app.core.sources import ensure_source
 from app.core.targeting.coverage import recompute_coverage
 from app.enrich.website import enrich_website
@@ -136,15 +136,6 @@ def merge_or_create(
     _country = addr.get("country") or country_override or ""
 
     existing = find_existing(session, key)
-
-    # Fallback: if a richer-keyed lead (phone/domain) didn't match an existing
-    # record, try name+city — handles the case where the existing record was
-    # keyed by name+city only (no phone/domain at the time of first ingest).
-    if existing is None and not key.startswith("name:"):
-        _city = addr.get("city", "") or ""
-        existing = find_existing(
-            session, name_city_fallback_key(normalized.business_name, _city)
-        )
 
     # ------------------------------------------------------------------ MERGE
     if existing is not None:

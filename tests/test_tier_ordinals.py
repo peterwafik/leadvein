@@ -55,19 +55,24 @@ def test_ingest_normalized_stamps_columns():
 
 
 def test_merge_path_restamps_columns():
-    # gap-fill a contact onto an existing lead -> validation re-runs -> ordinals move
+    # Both leads share ONE dedup identity: name:merge-ord|ordinalville
+    # (neither has phone nor website).  fill adds public_email so the merge
+    # branch fires changed_contact, re-runs validation, and restamps ordinals.
     base = NormalizedLead(business_name="Merge Ord", category_keys=["cafe"],
                           address={"city": "Ordinalville", "country": "GB"},
                           raw_ref="node/992")
     fill = NormalizedLead(business_name="Merge Ord", category_keys=["cafe"],
                           address={"city": "Ordinalville", "country": "GB"},
-                          phone="+441865000002", raw_ref="node/993")
+                          public_email="merge@ord.example",
+                          raw_ref="node/993")
     with Session(lv.engine) as s:
         ingest_normalized(s, [base], source_key="osm_geofabrik",
                           source_license="ODbL", enrich_fn=lambda _n: {})
         lead = s.exec(select(Lead).where(Lead.business_name == "Merge Ord")).first()
-        before = lead.tier_phone
+        before_email = lead.tier_email
         ingest_normalized(s, [fill], source_key="osm_geofabrik",
                           source_license="ODbL", enrich_fn=lambda _n: {})
         s.refresh(lead)
-        assert before == 0 and lead.tier_phone >= 1
+        assert before_email == 0
+        assert lead.tier_email >= 1          # present or validated after email filled
+        assert lead.tier_contact >= 1        # tier_contact = max(tier_phone, tier_email)
