@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %} · Saved audiences{% endblock %}
+{% block heading %}Saved audiences{% endblock %}
+{% block body %}
+{{ ui.page_intro('Saved audiences',
+   'Re-run a saved targeting any time — opening one lands on Review &amp; run with everything loaded.') }}
+
+{% if segments or legacy %}
+
+  {% if segments %}
+  <div class="space-y-3">
+    {% for s in segments %}
+    {% call ui.card() %}
+    <div class="flex items-center justify-between gap-4 px-4 py-3">
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold text-ink-900 truncate">{{ s.name }}</p>
+        <p class="text-[12.5px] text-ink-500 mt-0.5">Saved {{ s.created_at[:10] }}</p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        {{ ui.btn('Open', href='/app/find?audience=' ~ s.id, kind='secondary') }}
+        <form method="post" action="/app/audiences/{{ s.id }}/delete">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          {{ ui.btn('Delete', type='submit', kind='danger') }}
+        </form>
+      </div>
+    </div>
+    {% endcall %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if legacy %}
+  <div class="mt-8">
+    <h3 class="mb-3 text-sm font-semibold text-ink-600 tracking-wide uppercase">Older saved searches</h3>
+    <div class="space-y-3">
+      {% for r in legacy %}
+      {% call ui.card() %}
+      <div class="flex items-center gap-3 px-4 py-3">
+        {{ ui.badge('legacy', 'neutral') }}
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-ink-900 truncate">{{ r.name }}</p>
+          <p class="text-[12.5px] text-ink-500 mt-0.5">Saved from the old search — open Find leads to rebuild it.</p>
+        </div>
+        {{ ui.btn('Find leads', href='/app/find', kind='secondary') }}
+      </div>
+      {% endcall %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+{% else %}
+  {{ ui.empty_state('No saved audiences yet',
+     'Build targeting in Find leads and click "Save as audience".',
+     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>') }}
+{% endif %}
+
+{% endblock %}

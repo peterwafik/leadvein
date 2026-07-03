@@ -1,0 +1,213 @@
+{# ── Advanced targeting disclosure — ported from composer.html's advanced panel.
+     Markup only; wired to find.js advReadComposition() / advLoadComposition(comp).
+     Conditions are combined with AND; every registered predicate gets a row so a
+     loaded composition (campaign/saved audience) is never silently dropped. ── #}
+{% import "components.html" as ui %}
+{# Human-readable labels for predicate param names.
+   Fallback: replace('_',' ')|title.
+   DO NOT change data-param attrs or any JS — display text only. #}
+{% set _param_labels = {
+  'min_strength': 'Match strength',
+  'recipe_in':   'Platforms',
+  'days':        'Days',
+  'value':       'Value',
+  'in':          'Any of',
+  'min':         'Minimum',
+  'signal':      'Signal'
+} %}
+<div class="rounded-xl border border-slate-200 bg-white shadow-card" data-advanced-panel>
+  <div class="border-b border-slate-100 px-5 py-4">
+    <p class="text-[13px] text-ink-500">Every registered condition. Conditions are combined with AND. Toggle "Exclude" to leave out matches.</p>
+  </div>
+
+  {# Group available predicates by group #}
+  {% set ns = namespace(prev_group='') %}
+  <div id="advConditions" class="px-5 py-4 space-y-3">
+    {% for opt in options.available %}
+      {% if opt.key != 'web.runs_tech' %}
+      {% if opt.group != ns.prev_group %}
+        {% set ns.prev_group = opt.group %}
+        <p class="pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400 first:pt-0">{{ opt.group|replace('_',' ')|title }}</p>
+      {% endif %}
+      <div class="adv-condition flex flex-wrap items-start gap-3 rounded-lg border border-slate-200 p-3"
+           data-key="{{ opt.key }}"
+           data-schema='{{ opt.params_schema | tojson }}'>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-2">
+            <label class="flex items-center gap-2 text-sm font-medium text-ink-700 cursor-pointer">
+              <input type="checkbox" class="adv-enable h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40" data-key="{{ opt.key }}">
+              {{ opt.label }}
+            </label>
+            {% if opt.coverage_pct %}
+              {% set cov_vals = opt.coverage_pct.values()|list %}
+              {% if cov_vals %}
+              <span class="text-[11px] text-ink-400">{{ (cov_vals|sum / cov_vals|length)|int }}% coverage</span>
+              {% endif %}
+            {% endif %}
+          </div>
+          {# Render param inputs based on params_schema #}
+          <div class="adv-params ml-6 space-y-2 hidden">
+            {% for param_name, param_type in opt.params_schema.items() %}
+              <div class="flex items-center gap-2">
+                <label class="text-[12px] text-ink-600 w-20 shrink-0">{{ _param_labels[param_name] if param_name in _param_labels else param_name | replace('_',' ') | title }}</label>
+                {% if param_type == 'int' %}
+                  <input type="number" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm w-28 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
+                         data-param="{{ param_name }}" placeholder="0">
+                {% elif param_type == 'list[string]' %}
+                  <div class="flex-1">
+                    <div class="adv-chip-box flex min-h-[34px] flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm focus-within:border-brand-500"
+                         data-param="{{ param_name }}">
+                      <input class="adv-chip-input min-w-[80px] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-ink-400"
+                             placeholder="type, press Enter…">
+                    </div>
+                    <input type="hidden" class="adv-param-input adv-chip-value" data-param="{{ param_name }}" value="">
+                  </div>
+                {% else %}
+                  <input type="text" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm flex-1 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
+                         data-param="{{ param_name }}" placeholder="">
+                {% endif %}
+              </div>
+            {% endfor %}
+            {# Negate toggle #}
+            <label class="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer mt-1">
+              <input type="checkbox" class="adv-negate h-3.5 w-3.5 rounded border-slate-300 text-red-500 focus:ring-red-400/40">
+              Exclude (NOT) — leave out matches for this condition
+            </label>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {# Unavailable predicates — rendered as full .adv-condition rows so advLoadComposition
+     can find them via querySelector('.adv-condition[data-key=...]') and campaigns/audiences
+     that include these predicates are NOT silently dropped. Greyed + labelled sparse. #}
+  {% if options.unavailable %}
+  <div class="border-t border-slate-100 px-5 py-4">
+    <p class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Sparse in current inventory — loadable but low coverage</p>
+    <div class="space-y-2">
+      {% set ns2 = namespace(prev_group='') %}
+      {% for opt in options.unavailable %}
+        {% if opt.key != 'web.runs_tech' %}
+        {% if opt.group != ns2.prev_group %}
+          {% set ns2.prev_group = opt.group %}
+          <p class="pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-ink-300">{{ opt.group|replace('_',' ')|title }}</p>
+        {% endif %}
+        <div class="adv-condition flex flex-wrap items-start gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 opacity-70"
+             data-key="{{ opt.key }}"
+             data-schema='{{ opt.params_schema | tojson }}'>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-2">
+              <label class="flex items-center gap-2 text-sm font-medium text-ink-500 cursor-pointer">
+                <input type="checkbox" class="adv-enable h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40" data-key="{{ opt.key }}">
+                {{ opt.label }}
+              </label>
+              {% if opt.coverage_pct %}
+                {% set cov_vals = opt.coverage_pct.values()|list %}
+                {% if cov_vals %}
+                <span class="text-[11px] text-ink-400">{{ (cov_vals|sum / cov_vals|length)|int }}% coverage — sparse in current inventory</span>
+                {% else %}
+                <span class="text-[11px] text-ink-400">sparse in current inventory</span>
+                {% endif %}
+              {% else %}
+                <span class="text-[11px] text-ink-400">sparse in current inventory</span>
+              {% endif %}
+            </div>
+            <div class="adv-params ml-6 space-y-2 hidden">
+              {% for param_name, param_type in opt.params_schema.items() %}
+                <div class="flex items-center gap-2">
+                  <label class="text-[12px] text-ink-600 w-20 shrink-0">{{ _param_labels[param_name] if param_name in _param_labels else param_name | replace('_',' ') | title }}</label>
+                  {% if param_type == 'int' %}
+                    <input type="number" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm w-28 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
+                           data-param="{{ param_name }}" placeholder="0">
+                  {% elif param_type == 'list[string]' %}
+                    <div class="flex-1">
+                      <div class="adv-chip-box flex min-h-[34px] flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm focus-within:border-brand-500"
+                           data-param="{{ param_name }}">
+                        <input class="adv-chip-input min-w-[80px] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-ink-400"
+                               placeholder="type, press Enter…">
+                      </div>
+                      <input type="hidden" class="adv-param-input adv-chip-value" data-param="{{ param_name }}" value="">
+                    </div>
+                  {% else %}
+                    <input type="text" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm flex-1 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
+                           data-param="{{ param_name }}" placeholder="">
+                  {% endif %}
+                </div>
+              {% endfor %}
+              <label class="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer mt-1">
+                <input type="checkbox" class="adv-negate h-3.5 w-3.5 rounded border-slate-300 text-red-500 focus:ring-red-400/40">
+                Exclude (NOT) — leave out matches for this condition
+              </label>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Technology group — data-driven from tech_recipes ──────────────────── #}
+  {% if tech_recipes is defined and tech_recipes %}
+  <div class="border-t border-slate-100 px-5 py-4">
+    <p class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Technology — runs a fingerprinted platform</p>
+
+    {# Hidden adv-condition row: advReadComposition() + advLoadComposition read it #}
+    <div class="adv-condition" data-key="web.runs_tech"
+         data-schema='{"recipe_in":"list[string]","min_strength":"int"}'
+         style="display:none" aria-hidden="true">
+      <input type="checkbox" class="adv-enable" data-key="web.runs_tech">
+      <div class="adv-params hidden">
+        <div class="adv-chip-box" data-param="recipe_in">
+          <input class="adv-chip-input" type="text" placeholder="">
+        </div>
+        <input type="hidden" class="adv-param-input adv-chip-value" data-param="recipe_in" value="[]">
+        <input type="number" class="adv-param-input" data-param="min_strength" value="1" min="1" max="5">
+        <input type="checkbox" class="adv-negate">
+      </div>
+    </div>
+
+    {# Visible recipe picker — grouped by category. Disabled recipes are unselectable. #}
+    {% for cat, cat_recipes in tech_recipes | groupby('category') %}
+    <p class="pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-500">{{ cat | replace('_', ' ') | title }}</p>
+    <div class="flex flex-wrap gap-2 mb-2">
+      {% for recipe in cat_recipes %}
+      {% if recipe.enabled %}
+      <button type="button"
+              class="tech-recipe-btn rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-ink-700 shadow-sm transition hover:border-brand-400 hover:text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+              data-recipe="{{ recipe.recipe_key }}">
+        {{ recipe.recipe_key | replace('_', ' ') | title }}
+        {% if recipe.confidence == 'high' %}{{ ui.badge('strong signal','green','ml-1') }}{% endif %}
+      </button>
+      {% else %}
+      <span data-recipe-disabled class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-ink-400 opacity-60 cursor-not-allowed select-none"
+            title="low-confidence — test before use">
+        {{ recipe.recipe_key | replace('_', ' ') | title }}
+        {{ ui.badge('test before use','neutral','ml-1') }}
+      </span>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    {# Min strength + clear #}
+    <div class="mt-3 flex flex-wrap items-center gap-4">
+      <label class="flex items-center gap-2 text-[13px] text-ink-600">
+        Min. match strength
+        <input type="number" id="techMinStrength" min="1" max="5" value="1"
+               class="w-16 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm shadow-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25">
+      </label>
+      <button type="button" id="techClear"
+              class="text-[12px] text-ink-500 hover:text-ink-700 hover:underline">Clear selection</button>
+    </div>
+
+    {# Selected display #}
+    <div id="techSelectedDisplay" class="mt-2 hidden">
+      <span class="text-[12px] text-ink-500">Selected: </span>
+      <span id="techSelectedList" class="text-[12px] font-medium text-brand-700"></span>
+    </div>
+  </div>
+  {% endif %}
+</div>

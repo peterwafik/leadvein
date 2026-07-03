@@ -1,0 +1,1184 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %} · Find leads{% endblock %}
+{% block heading %}Find leads{% endblock %}
+{% block topbar %}{{ ui.credits_pill(credits if credits is defined else '—') }}{% endblock %}
+{% block body %}
+<script>
+  window._csrf = "{{ csrf }}";
+  window._prefill = {{ prefill|tojson if prefill else 'null' }};
+  window._preset = {{ preset|tojson if preset else 'null' }};
+  window._mode = "{{ mode }}";
+</script>
+
+<div data-page="find" class="space-y-5">
+
+  {# ── Mode tabs ──────────────────────────────────────────────────────────── #}
+  <div class="flex items-center gap-2">
+    <div class="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-card" role="tablist">
+      <button type="button" data-mode-tab="guided" role="tab"
+        class="rounded-md px-4 py-1.5 text-sm font-semibold transition">Campaigns (guided)</button>
+      <button type="button" data-mode-tab="quick" role="tab"
+        class="rounded-md px-4 py-1.5 text-sm font-semibold transition">Quick search</button>
+    </div>
+  </div>
+
+  {# ── Stepper rail (guided only) ─────────────────────────────────────────── #}
+  <div data-stepper-wrap>
+    {{ ui.stepper(['Campaign','Where','Who','Quality bar','Review & run'], 1) }}
+  </div>
+
+  {# ── Inline error banner slot ───────────────────────────────────────────── #}
+  <div data-error-slot class="hidden">
+    <div class="mb-2 rounded-lg px-4 py-3 text-sm font-medium ring-1 bg-red-50 text-red-800 ring-red-100">Something went wrong — try again.</div>
+  </div>
+
+  {# Coverage badge templates — classes live in ONE place (mirror ui.coverage_badge) #}
+  <template id="tpl-coverage-has"><span class="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-800 tabular-nums"></span></template>
+  <template id="tpl-coverage-none"><span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-ink-400">0 — not yet ingested</span></template>
+
+  {# Tier chip templates — single source of truth (mirror ui.tier_chip / ui.quality_chips in components.html) #}
+  <template id="tpl-tier-validated"><span class="inline-flex items-center gap-1.5 rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-800"></span></template>
+  <template id="tpl-tier-present"><span class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-ink-600"></span></template>
+  <template id="tpl-tier-locked"><span data-tier-locked class="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-ink-400">🔒 Verified-live — requires licensed provider</span></template>
+
+  <div id="stepWrap" class="gap-6">
+    {# ── Left column: step panels 1–4 + guided nav ───────────────────────── #}
+    <div data-left-col class="space-y-5">
+
+      {# ══ Step 1 — Campaign ═════════════════════════════════════════════ #}
+      <section data-step-panel="1" class="space-y-4">
+        <div>
+          <h2 class="text-lg font-semibold tracking-tight text-ink-900">Start from a campaign</h2>
+          <p class="mt-1 text-[13px] text-ink-500">Pick a ready-made targeting template, or describe your own from scratch.</p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          {% for c in campaigns %}
+          {% set gated = c.gated_signals and c.gated_signals != '[]' %}
+          <button type="button" data-campaign-card="{{ c.key }}"
+            class="flex flex-col rounded-xl border border-slate-200 bg-white p-4 text-left shadow-card transition hover:border-brand-300 hover:shadow-pop focus:outline-none focus:ring-2 focus:ring-brand-500/30">
+            <div class="flex items-start justify-between gap-2">
+              <p class="text-sm font-semibold text-ink-900">{{ c.name }}</p>
+              {% if gated %}{{ ui.badge('Some traits need a licensed source','amber') }}{% else %}{{ ui.badge('Ready today','green') }}{% endif %}
+            </div>
+            <p class="mt-1.5 line-clamp-3 text-[12.5px] leading-snug text-ink-500">{{ c.description }}</p>
+          </button>
+          {% endfor %}
+          <button type="button" data-campaign-card=""
+            class="flex flex-col items-start rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-4 text-left shadow-card transition hover:border-brand-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30">
+            <span class="grid h-9 w-9 place-items-center rounded-lg bg-white text-brand-600 shadow-card">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </span>
+            <p class="mt-2 text-sm font-semibold text-ink-900">Describe your own</p>
+            <p class="mt-1 text-[12.5px] leading-snug text-ink-500">Build targeting from scratch — where, who, and a quality bar.</p>
+          </button>
+        </div>
+      </section>
+
+      {# ══ Step 2 — Where ════════════════════════════════════════════════ #}
+      <section data-step-panel="2" class="hidden space-y-4">
+        <div>
+          <h2 class="text-lg font-semibold tracking-tight text-ink-900">Where should we look?</h2>
+          <p class="mt-1 text-[13px] text-ink-500">Choose a country, then whole-country or specific areas within it.</p>
+        </div>
+        <div class="grid gap-4 md:grid-cols-2">
+          {# Left pane: countries #}
+          <div class="rounded-xl border border-slate-200 bg-white shadow-card">
+            <div class="border-b border-slate-100 px-4 py-3">
+              <input type="text" data-country-search placeholder="Search countries…" autocomplete="off"
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+            </div>
+            <div data-country-list class="max-h-80 overflow-y-auto p-2 space-y-1">
+              <p class="px-2 py-4 text-[13px] text-ink-400">Loading countries…</p>
+            </div>
+          </div>
+          {# Right pane: areas within selected country #}
+          <div class="rounded-xl border border-slate-200 bg-white shadow-card">
+            <div class="border-b border-slate-100 px-4 py-3 space-y-2">
+              <input type="text" data-area-search placeholder="Search areas in the selected country…" autocomplete="off" disabled
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:bg-slate-50 disabled:text-ink-400">
+              <label class="flex items-center gap-2 text-[13px] font-medium text-ink-700">
+                <input type="checkbox" data-whole-country disabled class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40">
+                Whole country <span data-whole-country-name class="text-ink-400"></span>
+              </label>
+              <p class="text-[11.5px] text-ink-400">Whole country replaces any specific areas you've selected.</p>
+            </div>
+            <div data-area-list class="max-h-72 overflow-y-auto p-2 space-y-2">
+              <p class="px-2 py-4 text-[13px] text-ink-400">Select a country to see its areas.</p>
+            </div>
+          </div>
+        </div>
+        {# Selected chips #}
+        <div>
+          <p class="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Selected locations</p>
+          <div data-geo-chips class="flex flex-wrap items-center gap-1.5 min-h-[34px]">
+            <span data-geo-empty class="text-[12.5px] text-ink-400">Nothing selected yet.</span>
+          </div>
+        </div>
+        <p data-zero-copy class="rounded-lg bg-slate-50 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-500 ring-1 ring-slate-100">
+          Areas marked <span class="font-medium text-ink-600">"0 — not yet ingested"</span> have no coverage yet. You can still select them, or use
+          <span class="font-medium text-ink-600">Request this area</span> to ask us to ingest them — but they will return no leads until then.
+        </p>
+      </section>
+
+      {# ══ Step 3 — Who ══════════════════════════════════════════════════ #}
+      <section data-step-panel="3" class="hidden space-y-4">
+        <div>
+          <h2 class="text-lg font-semibold tracking-tight text-ink-900">Who are you looking for?</h2>
+          <p class="mt-1 text-[13px] text-ink-500">Pick business categories, and optionally the platforms a business runs. Leave empty for all types.</p>
+        </div>
+        <input type="text" data-who-filter placeholder="Filter categories and technologies…" autocomplete="off"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+
+        {# Chips summary #}
+        <div class="flex flex-wrap items-center gap-1.5 min-h-[34px]" data-who-chips>
+          <span data-who-empty class="text-[12.5px] text-ink-400">Nothing selected — all business types included.</span>
+        </div>
+
+        {# Categories #}
+        <div class="rounded-xl border border-slate-200 bg-white shadow-card">
+          <p class="border-b border-slate-100 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Business categories</p>
+          <div class="max-h-64 overflow-y-auto p-2 space-y-0.5">
+            {% for cat in cat_options %}
+            <button type="button" data-cat-row="{{ cat.key }}"
+              class="who-row flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-ink-700 transition hover:bg-brand-50">
+              <span class="who-check grid h-4 w-4 shrink-0 place-items-center rounded border border-slate-300 text-white">
+                <svg class="opacity-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>
+              </span>
+              <span class="capitalize who-label">{{ cat.key|replace('_',' ') }}</span>
+              <span class="ml-auto text-[11px] text-ink-400 tabular-nums">{{ cat.count }}</span>
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Technology groups #}
+        {% if tech_groups %}
+        <div class="rounded-xl border border-slate-200 bg-white shadow-card">
+          <p class="border-b border-slate-100 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Runs a specific platform (optional)</p>
+          <div class="max-h-72 overflow-y-auto p-3 space-y-3">
+            {% for cat, recipes in tech_groups.items() %}
+            <div>
+              <p class="pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-500">{{ cat|replace('_',' ')|title }}</p>
+              <div class="space-y-0.5">
+                {% for r in recipes %}
+                {% if r.enabled %}
+                <button type="button" data-recipe-row="{{ r.recipe_key }}"
+                  class="who-row flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-ink-700 transition hover:bg-brand-50">
+                  <span class="who-check grid h-4 w-4 shrink-0 place-items-center rounded border border-slate-300 text-white">
+                    <svg class="opacity-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>
+                  </span>
+                  <span class="who-label capitalize">{{ r.tech_type|replace('_',' ') }}</span>
+                  {% if r.confidence == 'high' %}{{ ui.badge('strong signal','green') }}{% endif %}
+                </button>
+                {% else %}
+                <div data-recipe-disabled class="who-row flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-ink-400 opacity-60 cursor-not-allowed select-none" title="low-confidence — test before use">
+                  <span class="grid h-4 w-4 shrink-0 place-items-center rounded border border-dashed border-slate-300"></span>
+                  <span class="who-label capitalize">{{ r.tech_type|replace('_',' ') }}</span>
+                  {{ ui.badge('test before use','neutral') }}
+                </div>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="border-t border-slate-100 px-4 py-2.5 flex items-center gap-2">
+            <label class="flex items-center gap-2 text-[13px] text-ink-600">
+              Min. match strength
+              <input type="number" data-who-min-strength min="1" max="5" value="1"
+                class="w-16 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm shadow-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25">
+            </label>
+          </div>
+        </div>
+        {% endif %}
+      </section>
+
+      {# ══ Step 4 — Quality bar ══════════════════════════════════════════ #}
+      <section data-step-panel="4" class="hidden space-y-5">
+        <div>
+          <h2 class="text-lg font-semibold tracking-tight text-ink-900">Set your quality bar</h2>
+          <p class="mt-1 text-[13px] text-ink-500">How reachable, how strong, and how recently checked the leads need to be.</p>
+        </div>
+
+        {# Contact channel #}
+        <fieldset class="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+          <legend class="px-1 text-sm font-semibold text-ink-700">How will you reach them?</legend>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2" data-radio-group="contact_channel">
+            {% for val, lbl in [('phone','Phone'),('email','Email'),('either','Either'),('','No requirement')] %}
+            <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] text-ink-700 transition hover:border-brand-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
+              <input type="radio" name="contact_channel" value="{{ val }}" {{ 'checked' if val == 'either' }} class="h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500/40">
+              {{ lbl }}
+            </label>
+            {% endfor %}
+          </div>
+          <p class="mt-2 text-[12px] leading-snug text-ink-500"><span class="font-medium text-ink-600">Validated</span> means the contact passed format and line-type checks (phone: line-type; email: syntax + MX). It does not mean the mailbox or line was dialled.</p>
+        </fieldset>
+
+        {# Min quality #}
+        <fieldset class="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+          <legend class="px-1 text-sm font-semibold text-ink-700">Lead quality</legend>
+          <div class="mt-2 grid gap-2 sm:grid-cols-4" data-radio-group="min_quality">
+            {% for val, lbl in [('0','Any'),('50','Good (50+)'),('70','Strong (70+)'),('85','Best (85+)')] %}
+            <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] text-ink-700 transition hover:border-brand-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
+              <input type="radio" name="min_quality" value="{{ val }}" {{ 'checked' if val == '0' }} class="h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500/40">
+              {{ lbl }}
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        {# Freshness #}
+        <fieldset class="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+          <legend class="px-1 text-sm font-semibold text-ink-700">How recently verified?</legend>
+          <div class="mt-2 grid gap-2 sm:grid-cols-3" data-radio-group="freshness_days">
+            {% for val, lbl in [('0','Any time'),('30','Last 30 days'),('90','Last 90 days')] %}
+            <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] text-ink-700 transition hover:border-brand-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
+              <input type="radio" name="freshness_days" value="{{ val }}" {{ 'checked' if val == '0' }} class="h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500/40">
+              {{ lbl }}
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        {# Locked verified-live tier — NEVER an input #}
+        <div data-tier-locked class="flex items-start gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 opacity-70">
+          <span class="mt-0.5 shrink-0 text-ink-400">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          </span>
+          <div>
+            <p class="text-[13px] font-semibold text-ink-600">🔒 Verified-live — requires licensed provider</p>
+            <p class="mt-0.5 text-[12px] leading-snug text-ink-500">Only a licensed verification provider can confirm a mailbox or line is live. We never claim it ourselves.</p>
+          </div>
+        </div>
+      </section>
+
+      {# ── Guided nav (Back / Next) ──────────────────────────────────────── #}
+      <nav data-guided-nav class="flex items-center justify-between">
+        <button type="button" data-nav-back class="rounded-lg px-4 py-2.5 text-sm font-semibold text-ink-600 transition hover:bg-slate-100">← Back</button>
+        <button type="button" data-nav-next class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 active:translate-y-px">Next →</button>
+      </nav>
+    </div>
+
+    {# ══ Step 5 / Review column ═══════════════════════════════════════════ #}
+    <section data-step-panel="5" data-review-col class="hidden space-y-5">
+      <div>
+        <h2 class="text-lg font-semibold tracking-tight text-ink-900">Review &amp; run</h2>
+        <p class="mt-1 text-[13px] text-ink-500">This is exactly what will run — in plain language.</p>
+      </div>
+
+      {# Sentence box #}
+      <div data-sentence-box class="rounded-xl border border-brand-200 bg-brand-50 p-4 text-[13.5px] leading-relaxed text-brand-800">
+        <span data-sentence>Adjust your targeting to see the summary.</span>
+      </div>
+
+      {# Gated notices #}
+      <div data-gated-panel class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-amber-700">Not included — requires a licensed source</p>
+        <div data-gated-list class="space-y-2"></div>
+      </div>
+
+      {# Estimate panel #}
+      <div data-estimate-panel class="rounded-xl border border-slate-200 bg-white shadow-card">
+        <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+          <span class="text-sm font-semibold text-ink-700">Live estimate</span>
+          <span data-estimate-badge class="text-[12px] font-medium text-ink-400">—</span>
+        </div>
+        <div class="px-5 py-4 space-y-4" data-estimate-body>
+          <div class="flex items-baseline gap-2">
+            <span data-estimate-count class="text-3xl font-bold text-ink-900">—</span>
+            <span class="text-sm text-ink-500">leads match</span>
+          </div>
+          <div>
+            <p class="mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Quality bands</p>
+            <div class="space-y-1.5">
+              {% for band, lbl in [('85-100','Best'),('70-84','Strong'),('50-69','Good'),('0-49','Low')] %}
+              <div class="flex items-center gap-2">
+                <span class="w-12 shrink-0 text-[11px] text-ink-500">{{ lbl }}</span>
+                <div class="flex-1 rounded-full bg-slate-100 h-2 overflow-hidden">
+                  <div data-score-bar="{{ band }}" class="h-full rounded-full bg-brand-500 transition-all duration-300" style="width:0%"></div>
+                </div>
+                <span data-score-val="{{ band }}" class="w-8 shrink-0 text-right text-[11px] text-ink-500 tabular-nums">0</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div>
+            <p class="mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Freshness</p>
+            <div class="space-y-1.5">
+              {% for band, lbl in [('<=7','≤ 7 days'),('<=30','≤ 30 days'),('<=90','≤ 90 days'),('older','Older')] %}
+              <div class="flex items-center gap-2">
+                <span class="w-16 shrink-0 text-[11px] text-ink-500">{{ lbl }}</span>
+                <div class="flex-1 rounded-full bg-slate-100 h-2 overflow-hidden">
+                  <div data-fresh-bar="{{ band }}" class="h-full rounded-full bg-emerald-400 transition-all duration-300" style="width:0%"></div>
+                </div>
+                <span data-fresh-val="{{ band }}" class="w-8 shrink-0 text-right text-[11px] text-ink-500 tabular-nums">0</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Sample cards / zero state #}
+      <div>
+        <p class="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Sample leads (masked)</p>
+        <div data-sample-cards class="grid gap-3 sm:grid-cols-2"></div>
+        <div data-sample-empty class="hidden">
+          {{ ui.empty_state('No leads match yet',
+             'Areas marked "not yet ingested" have no coverage — try an area with leads, or request ingestion.') }}
+        </div>
+      </div>
+
+      {# Advanced disclosure #}
+      <details data-advanced class="rounded-xl border border-slate-200 bg-white shadow-card">
+        <summary class="cursor-pointer select-none px-5 py-3.5 text-sm font-semibold text-ink-700">Edit targeting (advanced)</summary>
+        <div class="px-4 pb-4">
+          {% include "_find_advanced.html" %}
+        </div>
+      </details>
+
+      {# Run + Save #}
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" data-run-btn class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 active:translate-y-px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-14 9V3Z"/></svg>
+          Run &amp; show leads
+        </button>
+        <form method="post" action="/app/find/save" class="flex items-center gap-2" data-save-form>
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <input type="hidden" name="composition" data-save-composition value="{}">
+          <input type="hidden" name="origin_key" data-save-origin value="">
+          <input type="text" name="name" placeholder="Name this audience…"
+            class="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+          {{ ui.btn('Save as audience', type='submit', kind='secondary', extra='shrink-0') }}
+        </form>
+      </div>
+
+      {# Results grid (after Run) #}
+      <div data-results-wrap class="hidden">
+        <p class="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Results</p>
+        <div data-results-grid class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+      </div>
+    </section>
+  </div>
+
+  <p class="mt-10 text-[11.5px] text-ink-400">Geographic reference © <a href="https://www.geonames.org" class="underline">GeoNames</a> (CC BY 4.0) · Lead data licensing shown per lead.</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  /* ── State (single source) ─────────────────────────────────────────────── */
+  const state = {
+    mode: (window._mode === 'quick') ? 'quick' : 'guided',
+    step: 1,
+    campaignKey: '',
+    answers: {
+      whole_countries: [], regions: [], cities: [],
+      categories: [], tech_recipes: [], min_strength: 1,
+      contact_channel: 'either', min_quality: 0, freshness_days: 0,
+    },
+    compiled: null,
+    advancedComposition: null,
+    geoCountry: '',          // currently browsed country code
+    geoCountryName: '',
+  };
+
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const CSRF = window._csrf || '';
+
+  /* ── Error banner ──────────────────────────────────────────────────────── */
+  let errTimer = null;
+  function showError() {
+    const slot = $('[data-error-slot]');
+    if (!slot) return;
+    slot.classList.remove('hidden');
+    clearTimeout(errTimer);
+    errTimer = setTimeout(() => slot.classList.add('hidden'), 4000);
+  }
+
+  /* ── Mode + stepper ────────────────────────────────────────────────────── */
+  function applyMode() {
+    const quick = state.mode === 'quick';
+    $$('[data-mode-tab]').forEach(b => {
+      const active = b.dataset.modeTab === state.mode;
+      b.classList.toggle('bg-brand-600', active);
+      b.classList.toggle('text-white', active);
+      b.classList.toggle('text-ink-600', !active);
+    });
+    const stepperWrap = $('[data-stepper-wrap]');
+    const nav = $('[data-guided-nav]');
+    const wrap = $('#stepWrap');
+    if (stepperWrap) stepperWrap.classList.toggle('hidden', quick);
+    if (nav) nav.classList.toggle('hidden', quick);
+    if (quick) {
+      wrap.classList.add('lg:grid', 'lg:grid-cols-[1fr_400px]', 'items-start');
+      // show 2,3,4 stacked; hide campaign step; show review col
+      $$('[data-step-panel]').forEach(p => {
+        const n = p.dataset.stepPanel;
+        if (p.hasAttribute('data-review-col')) { p.classList.remove('hidden'); return; }
+        p.classList.toggle('hidden', n === '1');
+      });
+      const leftCol = $('[data-left-col]');
+      if (leftCol) leftCol.classList.remove('hidden');
+      compileAndEstimate();
+    } else {
+      wrap.classList.remove('lg:grid', 'lg:grid-cols-[1fr_400px]', 'items-start');
+      setStep(state.step);
+    }
+  }
+
+  function setStep(n) {
+    state.step = n;
+    const leftCol = $('[data-left-col]');
+    const review = $('[data-review-col]');
+    if (n >= 5) {
+      if (leftCol) leftCol.classList.add('hidden');
+      if (review) review.classList.remove('hidden');
+      compileAndEstimate();
+    } else {
+      if (leftCol) leftCol.classList.remove('hidden');
+      if (review) review.classList.add('hidden');
+      $$('[data-left-col] [data-step-panel]').forEach(p => {
+        p.classList.toggle('hidden', p.dataset.stepPanel !== String(n));
+      });
+    }
+    // stepper visuals
+    $$('[data-step-btn]').forEach(btn => {
+      const idx = parseInt(btn.dataset.stepBtn, 10);
+      const cur = idx === n;
+      btn.classList.toggle('bg-brand-50', cur);
+      btn.classList.toggle('text-brand-800', cur);
+      btn.classList.toggle('text-ink-400', !cur);
+      const num = btn.querySelector('[data-step-num]');
+      if (num) {
+        num.classList.toggle('bg-brand-600', cur);
+        num.classList.toggle('text-white', cur);
+        num.classList.toggle('bg-slate-100', !cur);
+        num.classList.toggle('text-ink-500', !cur);
+      }
+    });
+    const back = $('[data-nav-back]');
+    if (back) back.style.visibility = n <= 1 ? 'hidden' : 'visible';
+    const next = $('[data-nav-next]');
+    if (next) next.textContent = n >= 5 ? 'Done' : 'Next →';
+  }
+
+  $$('[data-mode-tab]').forEach(b => b.addEventListener('click', () => {
+    state.mode = b.dataset.modeTab; applyMode();
+  }));
+  $$('[data-step-btn]').forEach(b => b.addEventListener('click', () => setStep(parseInt(b.dataset.stepBtn, 10))));
+  const nb = $('[data-nav-back]'); if (nb) nb.addEventListener('click', () => setStep(Math.max(1, state.step - 1)));
+  const nn = $('[data-nav-next]'); if (nn) nn.addEventListener('click', () => setStep(Math.min(5, state.step + 1)));
+
+  /* ── Step 1: campaign cards ────────────────────────────────────────────── */
+  $$('[data-campaign-card]').forEach(card => card.addEventListener('click', () => {
+    const key = card.dataset.campaignCard || '';
+    if (key) {
+      // Full navigation so the server injects window._prefill, which the bootstrap
+      // below then consumes to fill answers + jump to step 2.
+      window.location = '/app/find?campaign=' + encodeURIComponent(key);
+      return;
+    }
+    // "Describe your own" card — no campaign key, just advance to step 2.
+    state.campaignKey = '';
+    const _o = $('[data-save-origin]'); if (_o) _o.value = '';
+    setStep(2);
+  }));
+
+  /* ── Step 2: geo control ───────────────────────────────────────────────── */
+  let countriesLoaded = false, areaTimer = null;
+  function covBadge(count) {
+    const tpl = document.getElementById(count > 0 ? 'tpl-coverage-has' : 'tpl-coverage-none');
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    if (count > 0) node.textContent = count + (count === 1 ? ' lead' : ' leads');
+    return node;
+  }
+
+  async function loadCountries() {
+    if (countriesLoaded) return;
+    countriesLoaded = true;
+    try {
+      const res = await fetch('/app/geo/countries');
+      if (!res.ok) { showError(); return; }
+      const data = await res.json();
+      renderCountries(data.countries || []);
+    } catch (e) { showError(); }
+  }
+
+  function renderCountries(countries) {
+    const list = $('[data-country-list]');
+    if (!list) return;
+    list.innerHTML = '';
+    const q = ($('[data-country-search]').value || '').trim().toLowerCase();
+    countries.filter(c => !q || c.name.toLowerCase().indexOf(q) !== -1).forEach(c => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-ink-700 transition hover:bg-brand-50' +
+        (c.code === state.geoCountry ? ' bg-brand-50 font-semibold text-brand-700' : '');
+      const nameEl = document.createElement('span');
+      nameEl.className = 'flex-1'; nameEl.textContent = c.name;
+      btn.appendChild(nameEl);
+      btn.appendChild(covBadge(c.lead_count || 0));
+      btn.addEventListener('click', () => selectCountry(c.code, c.name));
+      list.appendChild(btn);
+    });
+    if (!list.children.length) list.innerHTML = '<p class="px-2 py-4 text-[13px] text-ink-400">No countries match.</p>';
+  }
+
+  function selectCountry(code, name) {
+    state.geoCountry = code; state.geoCountryName = name;
+    const search = $('[data-area-search]'); if (search) { search.disabled = false; search.value = ''; }
+    const wc = $('[data-whole-country]');
+    const wcName = $('[data-whole-country-name]');
+    if (wc) { wc.disabled = false; wc.checked = state.answers.whole_countries.indexOf(code) !== -1; }
+    if (wcName) wcName.textContent = '(' + name + ')';
+    loadAreas('');
+    // reflect selection highlight
+    if (countriesLoaded) { const q = $('[data-country-search]'); if (q) renderCountriesCached(); }
+  }
+  let _lastCountries = [];
+  function renderCountriesCached() { renderCountries(_lastCountries); }
+
+  async function loadAreas(q) {
+    if (!state.geoCountry) return;
+    const list = $('[data-area-list]');
+    try {
+      const res = await fetch('/app/geo/areas?country=' + encodeURIComponent(state.geoCountry) + '&q=' + encodeURIComponent(q || ''));
+      if (!res.ok) { showError(); return; }
+      const data = await res.json();
+      renderAreas(data);
+    } catch (e) { showError(); }
+  }
+
+  function areaSelected(name, kind) {
+    const arr = kind === 'region' ? state.answers.regions : state.answers.cities;
+    return arr.indexOf(name) !== -1;
+  }
+  function toggleArea(name, kind) {
+    const arr = kind === 'region' ? state.answers.regions : state.answers.cities;
+    const i = arr.indexOf(name);
+    if (i !== -1) arr.splice(i, 1); else {
+      arr.push(name);
+      // selecting an area clears whole-country for the browsed country (mutually exclusive)
+      const wi = state.answers.whole_countries.indexOf(state.geoCountry);
+      if (wi !== -1) { state.answers.whole_countries.splice(wi, 1); const wc = $('[data-whole-country]'); if (wc) wc.checked = false; }
+    }
+    renderGeoChips(); loadAreas(($('[data-area-search]').value || '')); compileAndEstimate();
+  }
+
+  function renderAreas(data) {
+    const list = $('[data-area-list]');
+    if (!list) return;
+    list.innerHTML = '';
+    const groups = data.groups || [];
+    const other = data.other || [];
+    if (!groups.length && !other.length) {
+      list.innerHTML = '<p class="px-2 py-4 text-[13px] text-ink-400">No areas match.</p>';
+      return;
+    }
+    const mkRow = (a, kind) => {
+      const zero = !(a.lead_count > 0);
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-brand-50';
+      const box = document.createElement('input');
+      box.type = 'checkbox'; box.className = 'h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40';
+      box.checked = areaSelected(a.name, kind);
+      box.addEventListener('change', () => toggleArea(a.name, kind));
+      const nm = document.createElement('span');
+      nm.className = 'flex-1 text-[13px] ' + (zero ? 'text-ink-400' : 'text-ink-700');
+      nm.textContent = a.name;
+      row.appendChild(box); row.appendChild(nm);
+      row.appendChild(covBadge(a.lead_count || 0));
+      if (zero) {
+        const req = document.createElement('button');
+        req.type = 'button';
+        req.className = 'shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-ink-500 ring-1 ring-slate-200 transition hover:bg-slate-100';
+        req.textContent = 'Request this area';
+        req.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          req.disabled = true;
+          try {
+            const res = await fetch('/app/geo/ingest-request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+              body: JSON.stringify({ country: state.geoCountry, area: a.name })
+            });
+            if (res.ok) { req.textContent = 'Requested ✓'; req.classList.add('text-brand-700'); }
+            else { showError(); req.disabled = false; }
+          } catch (e) { showError(); req.disabled = false; }
+        });
+        row.appendChild(req);
+      }
+      // Make the whole row clickable (not just the checkbox)
+      row.addEventListener('click', (e) => {
+        if (e.target === box) return; // native checkbox click already fires change
+        box.checked = !box.checked;
+        box.dispatchEvent(new Event('change'));
+      });
+      return row;
+    };
+    groups.forEach(g => {
+      const hdr = document.createElement('p');
+      hdr.className = 'px-2.5 pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400';
+      hdr.textContent = g.label;
+      list.appendChild(hdr);
+      (g.areas || []).forEach(a => list.appendChild(mkRow(a, a.kind)));
+    });
+    if (other.length) {
+      const hdr = document.createElement('p');
+      hdr.className = 'px-2.5 pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400';
+      hdr.textContent = 'Other areas in inventory';
+      list.appendChild(hdr);
+      other.forEach(a => list.appendChild(mkRow(a, 'city')));
+    }
+  }
+
+  function renderGeoChips() {
+    const box = $('[data-geo-chips]');
+    if (!box) return;
+    box.querySelectorAll('[data-chip]').forEach(c => c.remove());
+    const empty = $('[data-geo-empty]');
+    const _codeToName = {};
+    _lastCountries.forEach(ct => { _codeToName[ct.code] = ct.name; });
+    const items = []
+      .concat(state.answers.whole_countries.map(c => ({ label: 'Whole country: ' + (_codeToName[c] || c), kind: 'whole', val: c })))
+      .concat(state.answers.regions.map(r => ({ label: r, kind: 'region', val: r })))
+      .concat(state.answers.cities.map(c => ({ label: c, kind: 'city', val: c })));
+    if (empty) empty.style.display = items.length ? 'none' : '';
+    items.forEach(it => {
+      const chip = document.createElement('span');
+      chip.setAttribute('data-chip', '');
+      chip.className = 'inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-700 ring-1 ring-brand-100';
+      chip.appendChild(document.createTextNode(it.label + ' '));
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'text-brand-500 hover:text-brand-800 leading-none'; x.textContent = '×';
+      x.addEventListener('click', () => {
+        if (it.kind === 'whole') state.answers.whole_countries = state.answers.whole_countries.filter(v => v !== it.val);
+        else if (it.kind === 'region') state.answers.regions = state.answers.regions.filter(v => v !== it.val);
+        else state.answers.cities = state.answers.cities.filter(v => v !== it.val);
+        renderGeoChips();
+        if (state.geoCountry) loadAreas(($('[data-area-search]').value || ''));
+        const wc = $('[data-whole-country]'); if (wc && it.kind === 'whole' && it.val === state.geoCountry) wc.checked = false;
+        compileAndEstimate();
+      });
+      chip.appendChild(x);
+      box.insertBefore(chip, empty);
+    });
+  }
+
+  const cs = $('[data-country-search]');
+  if (cs) cs.addEventListener('input', () => { if (_lastCountries.length) renderCountries(_lastCountries); });
+  const as = $('[data-area-search]');
+  if (as) as.addEventListener('input', () => { clearTimeout(areaTimer); areaTimer = setTimeout(() => loadAreas(as.value), 250); });
+  const wc = $('[data-whole-country]');
+  if (wc) wc.addEventListener('change', () => {
+    if (!state.geoCountry) return;
+    if (wc.checked) {
+      if (state.answers.whole_countries.indexOf(state.geoCountry) === -1) state.answers.whole_countries.push(state.geoCountry);
+      // clear areas selected within this browse (mutually exclusive)
+      state.answers.cities = []; state.answers.regions = [];
+    } else {
+      state.answers.whole_countries = state.answers.whole_countries.filter(c => c !== state.geoCountry);
+    }
+    renderGeoChips(); loadAreas(($('[data-area-search]').value || '')); compileAndEstimate();
+  });
+
+  // wrap renderCountries to cache
+  const _renderCountriesOrig = renderCountries;
+  renderCountries = function (countries) { _lastCountries = countries; _renderCountriesOrig(countries); };
+
+  /* ── Step 3: who (categories + tech) ───────────────────────────────────── */
+  // Build recipe key → display label map from server-rendered rows (proper capitalisation like "GloriaFood")
+  const _recipeLabels = {};
+  $$('[data-recipe-row]').forEach(r => {
+    const lbl = r.querySelector('.who-label');
+    if (lbl) _recipeLabels[r.dataset.recipeRow] = lbl.textContent.trim();
+  });
+
+  function toggleWho(kind, val) {
+    const arr = kind === 'cat' ? state.answers.categories : state.answers.tech_recipes;
+    const i = arr.indexOf(val);
+    if (i !== -1) arr.splice(i, 1); else arr.push(val);
+    syncWho(); compileAndEstimate();
+  }
+  $$('[data-cat-row]').forEach(r => r.addEventListener('click', () => toggleWho('cat', r.dataset.catRow)));
+  $$('[data-recipe-row]').forEach(r => r.addEventListener('click', () => toggleWho('recipe', r.dataset.recipeRow)));
+
+  function syncWho() {
+    $$('[data-cat-row]').forEach(r => markRow(r, state.answers.categories.indexOf(r.dataset.catRow) !== -1));
+    $$('[data-recipe-row]').forEach(r => markRow(r, state.answers.tech_recipes.indexOf(r.dataset.recipeRow) !== -1));
+    const box = $('[data-who-chips]');
+    if (box) {
+      box.querySelectorAll('[data-chip]').forEach(c => c.remove());
+      const empty = $('[data-who-empty]');
+      const items = state.answers.categories.map(c => ({ v: c, kind: 'cat' }))
+        .concat(state.answers.tech_recipes.map(t => ({ v: t, kind: 'recipe' })));
+      if (empty) empty.style.display = items.length ? 'none' : '';
+      items.forEach(it => {
+        const chip = document.createElement('span');
+        chip.setAttribute('data-chip', '');
+        // Recipe chips use the server-rendered label (proper caps e.g. "GloriaFood");
+        // category chips keep capitalize CSS (keys are plain lowercase words like "restaurant").
+        const chipLabel = it.kind === 'recipe'
+          ? (_recipeLabels[it.v] || it.v.replace(/_/g, ' '))
+          : it.v.replace(/_/g, ' ');
+        chip.className = 'inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium capitalize text-brand-700 ring-1 ring-brand-100';
+        chip.appendChild(document.createTextNode(chipLabel + ' '));
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'text-brand-500 hover:text-brand-800 leading-none'; x.textContent = '×';
+        x.addEventListener('click', () => toggleWho(it.kind, it.v));
+        chip.appendChild(x);
+        box.insertBefore(chip, empty);
+      });
+    }
+  }
+  function markRow(row, on) {
+    const check = row.querySelector('.who-check');
+    if (check) {
+      check.classList.toggle('bg-brand-600', on);
+      check.classList.toggle('border-brand-600', on);
+      const svg = check.querySelector('svg'); if (svg) svg.classList.toggle('opacity-0', !on);
+    }
+    row.classList.toggle('bg-brand-50', on);
+  }
+  const whoFilter = $('[data-who-filter]');
+  if (whoFilter) whoFilter.addEventListener('input', () => {
+    const q = whoFilter.value.trim().toLowerCase();
+    $$('.who-row').forEach(r => {
+      const lbl = r.querySelector('.who-label');
+      const t = (lbl ? lbl.textContent : '').toLowerCase();
+      r.style.display = (!q || t.indexOf(q) !== -1) ? '' : 'none';
+    });
+  });
+  const minStr = $('[data-who-min-strength]');
+  if (minStr) minStr.addEventListener('input', () => { state.answers.min_strength = parseInt(minStr.value || '1', 10) || 1; compileAndEstimate(); });
+
+  /* ── Step 4: quality radios ────────────────────────────────────────────── */
+  $$('[data-radio-group]').forEach(g => {
+    const name = g.dataset.radioGroup;
+    g.querySelectorAll('input[type=radio]').forEach(inp => inp.addEventListener('change', () => {
+      if (name === 'contact_channel') state.answers.contact_channel = inp.value;
+      else state.answers[name] = parseInt(inp.value || '0', 10);
+      compileAndEstimate();
+    }));
+  });
+
+  /* ── Advanced disclosure: read/load composition ────────────────────────── */
+  function advReadComposition() {
+    const nodes = [];
+    $$('.adv-condition').forEach(row => {
+      const cb = row.querySelector('.adv-enable');
+      if (!cb || !cb.checked) return;
+      const key = row.dataset.key;
+      let schema = {};
+      try { schema = JSON.parse(row.dataset.schema || '{}'); } catch (e) { schema = {}; }
+      const params = {};
+      Object.keys(schema).forEach(pname => {
+        const ptype = schema[pname];
+        if (ptype === 'list[string]') {
+          const h = row.querySelector('.adv-chip-value[data-param="' + pname + '"]');
+          try { params[pname] = h ? JSON.parse(h.value || '[]') : []; } catch (e) { params[pname] = []; }
+        } else if (ptype === 'int') {
+          const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]');
+          params[pname] = el ? parseInt(el.value || '0', 10) : 0;
+        } else {
+          const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]');
+          params[pname] = el ? (el.value || '') : '';
+        }
+      });
+      const neg = row.querySelector('.adv-negate');
+      nodes.push({ predicate: key, params: params, negate: neg ? neg.checked : false });
+    });
+    return { op: 'AND', nodes: nodes };
+  }
+
+  function advActiveLabels() {
+    const labels = [];
+    $$('.adv-condition').forEach(row => {
+      const cb = row.querySelector('.adv-enable');
+      if (!cb || !cb.checked) return;
+      const lbl = row.querySelector('label');
+      let t = row.dataset.key;
+      if (lbl) t = lbl.textContent.trim();
+      if (row.dataset.key === 'web.runs_tech') {
+        const list = $('#techSelectedList');
+        t = 'Runs platform: ' + (list ? list.textContent : '');
+      }
+      const neg = row.querySelector('.adv-negate');
+      labels.push((neg && neg.checked ? 'Exclude — ' : '') + t);
+    });
+    return labels;
+  }
+
+  function advLoadComposition(comp) {
+    if (!comp || !Array.isArray(comp.nodes)) return;
+    $$('.adv-enable').forEach(cb => { cb.checked = false; const r = cb.closest('.adv-condition'); const p = r && r.querySelector('.adv-params'); if (p) p.classList.add('hidden'); });
+    const flat = [];
+    (function walk(n) { if (!n) return; if (n.op) (n.nodes || []).forEach(walk); else flat.push(n); })(comp);
+    flat.forEach(node => {
+      if (!node || !node.predicate) return;
+      const row = document.querySelector('.adv-condition[data-key="' + node.predicate + '"]');
+      if (!row) return;
+      const cb = row.querySelector('.adv-enable'); if (cb) cb.checked = true;
+      const pd = row.querySelector('.adv-params'); if (pd) pd.classList.remove('hidden');
+      let schema = {}; try { schema = JSON.parse(row.dataset.schema || '{}'); } catch (e) {}
+      const params = node.params || {};
+      Object.keys(schema).forEach(pname => {
+        const ptype = schema[pname];
+        if (ptype === 'list[string]') {
+          const vals = Array.isArray(params[pname]) ? params[pname] : [];
+          const h = row.querySelector('.adv-chip-value[data-param="' + pname + '"]'); if (h) h.value = JSON.stringify(vals);
+          const chipBox = row.querySelector('.adv-chip-box[data-param="' + pname + '"]');
+          if (chipBox) {
+            const inp = chipBox.querySelector('.adv-chip-input');
+            chipBox.querySelectorAll('.adv-chip').forEach(c => c.remove());
+            vals.forEach(v => {
+              const el = document.createElement('span');
+              el.className = 'adv-chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 ring-1 ring-brand-100';
+              el.appendChild(document.createTextNode(v + ' '));
+              if (inp) chipBox.insertBefore(el, inp); else chipBox.appendChild(el);
+            });
+          }
+        } else if (ptype === 'int') {
+          const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]'); if (el) el.value = String(params[pname] != null ? params[pname] : 0);
+        } else {
+          const el = row.querySelector('.adv-param-input[data-param="' + pname + '"]'); if (el) el.value = params[pname] != null ? params[pname] : '';
+        }
+      });
+      const neg = row.querySelector('.adv-negate'); if (neg) neg.checked = !!node.negate;
+    });
+    if (window._syncTechUI) window._syncTechUI();
+  }
+
+  // Wire advanced inputs → mark advancedComposition active
+  function onAdvancedChange() {
+    state.advancedComposition = advReadComposition();
+    compileAndEstimate();
+  }
+  $$('.adv-enable').forEach(cb => cb.addEventListener('change', function () {
+    const row = this.closest('.adv-condition');
+    const p = row && row.querySelector('.adv-params'); if (p) p.classList.toggle('hidden', !this.checked);
+    onAdvancedChange();
+  }));
+  $$('.adv-param-input').forEach(i => { i.addEventListener('input', onAdvancedChange); i.addEventListener('change', onAdvancedChange); });
+  $$('.adv-negate').forEach(cb => cb.addEventListener('change', onAdvancedChange));
+  $$('.adv-chip-box').forEach(box => {
+    const inp = box.querySelector('.adv-chip-input');
+    const param = box.dataset.param;
+    const hidden = box.closest('.adv-params') ? box.closest('.adv-params').querySelector('.adv-chip-value[data-param="' + param + '"]') : null;
+    let chips = [];
+    function render() {
+      box.querySelectorAll('.adv-chip').forEach(c => c.remove());
+      chips.forEach(v => {
+        const el = document.createElement('span');
+        el.className = 'adv-chip inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 ring-1 ring-brand-100';
+        el.appendChild(document.createTextNode(v + ' '));
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'text-brand-500'; x.textContent = '×';
+        x.addEventListener('click', () => { chips = chips.filter(c => c !== v); render(); onAdvancedChange(); });
+        el.appendChild(x);
+        if (inp) box.insertBefore(el, inp); else box.appendChild(el);
+      });
+      if (hidden) hidden.value = JSON.stringify(chips);
+    }
+    if (inp) inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const v = inp.value.trim().toLowerCase().replace(/\s+/g, '_');
+        if (v && chips.indexOf(v) === -1) chips.push(v);
+        inp.value = ''; render(); onAdvancedChange();
+      }
+    });
+  });
+
+  // Tech recipe picker inside advanced (mirrors composer)
+  (function () {
+    let techRecipes = [];
+    const techRow = document.querySelector('.adv-condition[data-key="web.runs_tech"]');
+    if (!techRow) return;
+    const techChip = techRow.querySelector('.adv-chip-value[data-param="recipe_in"]');
+    const techStr = techRow.querySelector('.adv-param-input[data-param="min_strength"]');
+    const techEnable = techRow.querySelector('.adv-enable');
+    const techParams = techRow.querySelector('.adv-params');
+    function syncHidden() {
+      const has = techRecipes.length > 0;
+      if (techEnable) techEnable.checked = has;
+      if (techParams) techParams.classList.toggle('hidden', !has);
+      if (techChip) techChip.value = JSON.stringify(techRecipes);
+      const ms = document.getElementById('techMinStrength');
+      if (techStr && ms) techStr.value = ms.value || '1';
+      const disp = document.getElementById('techSelectedDisplay');
+      const list = document.getElementById('techSelectedList');
+      if (disp) disp.classList.toggle('hidden', !has);
+      if (list) list.textContent = techRecipes.join(', ');
+    }
+    function syncBtns() {
+      $$('.tech-recipe-btn').forEach(b => {
+        const sel = techRecipes.indexOf(b.dataset.recipe) !== -1;
+        b.classList.toggle('bg-brand-600', sel); b.classList.toggle('text-white', sel); b.classList.toggle('border-brand-600', sel);
+      });
+    }
+    window._syncTechUI = function () {
+      if (!techChip) return;
+      try { techRecipes = JSON.parse(techChip.value || '[]'); } catch (e) { techRecipes = []; }
+      const ms = document.getElementById('techMinStrength');
+      if (ms && techStr) ms.value = techStr.value || '1';
+      syncBtns();
+    };
+    $$('.tech-recipe-btn').forEach(b => b.addEventListener('click', () => {
+      const r = b.dataset.recipe; const i = techRecipes.indexOf(r);
+      if (i !== -1) techRecipes.splice(i, 1); else techRecipes.push(r);
+      syncHidden(); syncBtns(); onAdvancedChange();
+    }));
+    const ms = document.getElementById('techMinStrength');
+    if (ms) ms.addEventListener('input', () => { syncHidden(); onAdvancedChange(); });
+    const clr = document.getElementById('techClear');
+    if (clr) clr.addEventListener('click', () => { techRecipes = []; syncHidden(); syncBtns(); onAdvancedChange(); });
+  })();
+
+  /* ── Compile + estimate (debounced) ────────────────────────────────────── */
+  let compileTimer = null;
+  let _estimateSeq = 0;
+  function compileAndEstimate() { clearTimeout(compileTimer); compileTimer = setTimeout(_run, 350); }
+
+  async function _run() {
+    const seq = ++_estimateSeq;
+    const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
+    // 1) compile from answers (always — provides the sentence + quality keys)
+    try {
+      const cRes = await fetch('/app/find/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+        body: JSON.stringify({ campaign_key: state.campaignKey, answers: state.answers })
+      });
+      if (seq !== _estimateSeq) return;
+      if (cRes.ok) { state.compiled = await cRes.json(); }
+      else if (cRes.status !== 401) { showError(); }
+    } catch (e) { if (seq !== _estimateSeq) return; showError(); }
+
+    if (seq !== _estimateSeq) return;
+    renderSentence(usingAdvanced);
+    renderGated(state.compiled ? state.compiled.gated_notices : []);
+
+    // 2) estimate
+    const composition = usingAdvanced ? state.advancedComposition
+                       : (state.compiled ? state.compiled.composition : { op: 'AND', nodes: [] });
+    const qkeys = state.compiled ? (state.compiled.quality_profile_keys || []) : [];
+    const saveComp = $('[data-save-composition]'); if (saveComp) saveComp.value = JSON.stringify(composition);
+    setEstimateLoading();
+    try {
+      const eRes = await fetch('/app/find/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+        body: JSON.stringify({ composition: composition, quality_profile_keys: qkeys, sample: 6 })
+      });
+      if (seq !== _estimateSeq) return;
+      if (!eRes.ok) { if (eRes.status !== 401) showError(); return; }
+      renderEstimate(await eRes.json());
+    } catch (e) { if (seq !== _estimateSeq) return; showError(); }
+  }
+
+  function renderSentence(usingAdvanced) {
+    const box = $('[data-sentence]');
+    if (!box) return;
+    if (usingAdvanced) {
+      const labels = advActiveLabels();
+      box.innerHTML = '<span class="font-semibold">Custom targeting (edited in advanced mode)</span>' +
+        (labels.length ? '<ul class="mt-1.5 list-disc pl-5 space-y-0.5">' + labels.map(l => '<li></li>').join('') + '</ul>' : '');
+      if (labels.length) { const lis = box.querySelectorAll('li'); labels.forEach((l, i) => { if (lis[i]) lis[i].textContent = l; }); }
+    } else {
+      box.textContent = (state.compiled && state.compiled.sentence) || 'Adjust your targeting to see the summary.';
+    }
+  }
+
+  function renderGated(notices) {
+    const panel = $('[data-gated-panel]'); const list = $('[data-gated-list]');
+    if (!panel || !list) return;
+    list.innerHTML = '';
+    if (!notices || !notices.length) { panel.classList.add('hidden'); return; }
+    panel.classList.remove('hidden');
+    notices.forEach(n => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-3 rounded-lg border border-amber-300 bg-white px-3.5 py-2.5';
+      const ic = document.createElement('span'); ic.className = 'shrink-0 text-amber-600';
+      ic.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+      const txt = document.createElement('span'); txt.className = 'flex-1 text-sm text-ink-700'; txt.textContent = (n.path || '').replace(/[._]/g, ' ');
+      const tag = document.createElement('span'); tag.className = 'shrink-0 text-[12px] font-medium text-amber-700'; tag.textContent = 'requires a licensed source';
+      row.appendChild(ic); row.appendChild(txt); row.appendChild(tag);
+      list.appendChild(row);
+    });
+  }
+
+  function setEstimateLoading() {
+    const body = $('[data-estimate-body]'); if (body) body.classList.add('animate-pulse');
+    const badge = $('[data-estimate-badge]'); if (badge) badge.textContent = 'loading…';
+  }
+
+  function renderEstimate(data) {
+    const body = $('[data-estimate-body]'); if (body) body.classList.remove('animate-pulse');
+    const count = data.count || 0;
+    const cnt = $('[data-estimate-count]'); if (cnt) cnt.textContent = count.toLocaleString();
+    const badge = $('[data-estimate-badge]'); if (badge) badge.textContent = count === 0 ? 'no matches' : (count === 1 ? '1 lead' : count + ' leads');
+
+    const sd = data.score_distribution || {};
+    const sdTotal = Object.values(sd).reduce((a, b) => a + b, 0) || 1;
+    ['85-100', '70-84', '50-69', '0-49'].forEach(k => {
+      const v = sd[k] || 0;
+      const bar = $('[data-score-bar="' + k + '"]'); const val = $('[data-score-val="' + k + '"]');
+      if (bar) bar.style.width = (v / sdTotal * 100).toFixed(1) + '%';
+      if (val) val.textContent = v;
+    });
+    const fd = data.freshness_distribution || {};
+    const fdTotal = Object.values(fd).reduce((a, b) => a + b, 0) || 1;
+    ['<=7', '<=30', '<=90', 'older'].forEach(k => {
+      const v = fd[k] || 0;
+      const bar = $('[data-fresh-bar="' + k + '"]'); const val = $('[data-fresh-val="' + k + '"]');
+      if (bar) bar.style.width = (v / fdTotal * 100).toFixed(1) + '%';
+      if (val) val.textContent = v;
+    });
+
+    const cards = $('[data-sample-cards]'); const empty = $('[data-sample-empty]');
+    if (cards) cards.innerHTML = '';
+    if (count === 0) {
+      if (empty) empty.classList.remove('hidden');
+    } else {
+      if (empty) empty.classList.add('hidden');
+      (data.samples || []).forEach(s => cards && cards.appendChild(sampleCard(s, false)));
+    }
+  }
+
+  function sampleCard(s, withUnlock) {
+    const score = s.score_total || 0;
+    const scoreClass = score >= 70 ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-ink-600';
+    const cat = (s.category_keys && s.category_keys[0]) ? s.category_keys[0].replace(/_/g, ' ') : 'business';
+    const loc = s.city || s.region || s.country || '—';
+    const source = s.source_type === 'open_data' ? 'OpenStreetMap' : (s.source_type || 'open_data');
+    const card = document.createElement('div');
+    card.className = 'group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card transition hover:border-slate-300 hover:shadow-pop';
+    const head = document.createElement('div'); head.className = 'flex items-start justify-between gap-2';
+    const sc = document.createElement('span'); sc.className = 'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[13px] font-bold ' + scoreClass; sc.textContent = score;
+    const src = document.createElement('span'); src.className = 'text-[11px] font-medium text-ink-400 text-right leading-tight'; src.textContent = source;
+    head.appendChild(sc); head.appendChild(src); card.appendChild(head);
+    const mid = document.createElement('div'); mid.className = 'mt-3';
+    const cn = document.createElement('p'); cn.className = 'text-sm font-semibold capitalize text-ink-900'; cn.textContent = cat;
+    const lc = document.createElement('p'); lc.className = 'text-[13px] text-ink-500'; lc.textContent = loc;
+    mid.appendChild(cn); mid.appendChild(lc); card.appendChild(mid);
+    const tags = document.createElement('div'); tags.className = 'mt-2.5 flex flex-wrap items-center gap-1.5';
+    if (s.quality) {
+      // Use template-sourced chip classes (single source of truth with tpl-tier-* templates above)
+      function tierChip(fieldLabel, info, meaning) {
+        const t = (info && info.tier) || 'absent';
+        const tplId = t === 'validated' ? 'tpl-tier-validated' : (t === 'present' ? 'tpl-tier-present' : null);
+        if (!tplId) return;
+        const tpl = document.getElementById(tplId);
+        if (!tpl) return;
+        const el = tpl.content.firstElementChild.cloneNode(true);
+        el.textContent = (t === 'validated' ? '✓✓ ' : '✓ ') + fieldLabel + ' — ' + (t === 'validated' ? 'Validated' : 'Present') + (t === 'validated' && meaning ? ' · ' + meaning : '');
+        tags.appendChild(el);
+      }
+      const q = s.quality;
+      const phoneInfo = q.phone || {};
+      let phoneMeaning = 'format + line type';
+      if (phoneInfo.line_type) phoneMeaning += ' (' + phoneInfo.line_type.replace(/_/g, ' ') + ')';
+      tierChip('Phone', phoneInfo, phoneMeaning);
+      tierChip('Email', q.email || {}, 'syntax + MX');
+      tierChip('Address', q.address || {}, 'geocoded');
+      tierChip('Website', q.website || {}, 'reachable');
+      const lockedTpl = document.getElementById('tpl-tier-locked');
+      if (lockedTpl) tags.appendChild(lockedTpl.content.firstElementChild.cloneNode(true));
+    } else {
+      function tag(t, cls) { const e = document.createElement('span'); e.className = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ' + cls; e.textContent = t; tags.appendChild(e); }
+      if (s.has_phone) tag('✓ Validated phone', 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100');
+      if (s.has_email) tag('Email', 'bg-slate-100 text-ink-600');
+      if (s.has_website) tag('Website', 'bg-slate-100 text-ink-600');
+    }
+    card.appendChild(tags);
+    if (s.reason) { const rp = document.createElement('p'); rp.className = 'mt-2.5 line-clamp-2 text-[12.5px] leading-snug text-ink-500'; rp.textContent = s.reason; card.appendChild(rp); }
+    const foot = document.createElement('div'); foot.className = 'mt-auto flex items-center justify-between border-t border-slate-100 pt-3 mt-3';
+    const price = document.createElement('span'); price.className = 'text-[13px] font-medium text-ink-600'; price.textContent = (s.price_credits || 0) + ' credit' + ((s.price_credits === 1) ? '' : 's');
+    foot.appendChild(price);
+    if (withUnlock) {
+      const form = document.createElement('form'); form.method = 'post'; form.action = '/app/unlock/' + s.lead_id;
+      const csrf = document.createElement('input'); csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = CSRF; form.appendChild(csrf);
+      const btn = document.createElement('button'); btn.className = 'rounded-lg bg-brand-600 px-3.5 py-1.5 text-[13px] font-semibold text-white transition hover:bg-brand-700'; btn.textContent = 'Unlock';
+      form.appendChild(btn); foot.appendChild(form);
+    } else {
+      const hint = document.createElement('span'); hint.className = 'text-[12px] text-ink-400'; hint.textContent = 'Unlock to see contact details'; foot.appendChild(hint);
+    }
+    card.appendChild(foot);
+    return card;
+  }
+
+  /* ── Run: full results grid (sample 60) ────────────────────────────────── */
+  const runBtn = $('[data-run-btn]');
+  if (runBtn) runBtn.addEventListener('click', async () => {
+    const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
+    const composition = usingAdvanced ? state.advancedComposition
+                       : (state.compiled ? state.compiled.composition : { op: 'AND', nodes: [] });
+    const qkeys = state.compiled ? (state.compiled.quality_profile_keys || []) : [];
+    runBtn.disabled = true;
+    try {
+      const res = await fetch('/app/find/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+        body: JSON.stringify({ composition: composition, quality_profile_keys: qkeys, sample: 60 })
+      });
+      if (!res.ok) { showError(); return; }
+      const data = await res.json();
+      const wrap = $('[data-results-wrap]'); const grid = $('[data-results-grid]');
+      if (grid) grid.innerHTML = '';
+      if (wrap) wrap.classList.remove('hidden');
+      if ((data.count || 0) === 0) {
+        if (grid) grid.innerHTML = '<p class="text-[13px] text-ink-500 col-span-full">No leads match yet. Areas marked "not yet ingested" have no coverage — try an area with leads, or request ingestion.</p>';
+      } else {
+        (data.samples || []).forEach(s => grid && grid.appendChild(sampleCard(s, true)));
+      }
+    } catch (e) { showError(); } finally { runBtn.disabled = false; }
+  });
+
+  /* ── Bootstrap: prefill / preset ───────────────────────────────────────── */
+  function bootstrap() {
+    applyMode();
+    if (window._prefill) {
+      const pf = typeof window._prefill === 'string' ? JSON.parse(window._prefill) : window._prefill;
+      state.campaignKey = pf.campaign_key || '';
+      const origin = $('[data-save-origin]'); if (origin) origin.value = state.campaignKey;
+      if (pf.answers) {
+        Object.keys(pf.answers).forEach(k => { state.answers[k] = pf.answers[k]; });
+      }
+      // reflect quality radios
+      setRadio('contact_channel', state.answers.contact_channel);
+      setRadio('min_quality', state.answers.min_quality);
+      setRadio('freshness_days', state.answers.freshness_days);
+      syncWho();
+      renderGeoChips();
+      if (state.mode === 'guided') setStep(2);
+      compileAndEstimate();
+    } else if (window._preset) {
+      const pr = typeof window._preset === 'string' ? JSON.parse(window._preset) : window._preset;
+      state.advancedComposition = pr;
+      advLoadComposition(pr);
+      const det = $('[data-advanced]'); if (det) det.open = true;
+      if (state.mode === 'guided') setStep(5);
+      compileAndEstimate();
+    }
+  }
+  function setRadio(name, val) {
+    const g = document.querySelector('[data-radio-group="' + name + '"]');
+    if (!g) return;
+    const inp = g.querySelector('input[value="' + val + '"]');
+    if (inp) inp.checked = true;
+  }
+
+  // init selected-state visuals
+  syncWho(); renderGeoChips();
+  bootstrap();
+
+  // load countries when step 2 first shown (or immediately in quick mode)
+  const wrapObserver = () => { if ((state.step === 2 || state.mode === 'quick')) loadCountries(); };
+  document.addEventListener('click', wrapObserver);
+  if (state.mode === 'quick' || state.step === 2) loadCountries();
+})();
+</script>
+{% endblock %}

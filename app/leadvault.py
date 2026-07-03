@@ -10,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import app.core.config as config
 import app.campaigns.models  # noqa — register Campaign table BEFORE init_db
 import app.fingerprints.models  # noqa — register FingerprintRecipe table BEFORE init_db
+import app.geo.ref  # noqa — register GeoRef table BEFORE init_db
 from app.core.db import init_db, User, BuyerAccount
 from app.core.auth import create_user
 from app.seed import seed_all
@@ -54,6 +55,8 @@ def _seed_accounts() -> None:
         seed_all(s)
         seed_campaigns(s)
         seed_recipes(s)
+        from app.geo.ref import seed_geo_fixture
+        seed_geo_fixture(s)
         creds = config.admin_credentials()
         if creds is not None:
             admin_email, admin_pw = creds
@@ -71,11 +74,16 @@ def _seed_accounts() -> None:
 
 _seed_accounts()
 
+from app.web.routes_geo import router as geo_router
+from app.web.routes_find import router as find_router
+
 app.include_router(auth_router)
 app.include_router(buyer_router)
 app.include_router(admin_router)
 app.include_router(billing_router)
 app.include_router(public_router)
+app.include_router(geo_router)
+app.include_router(find_router)
 
 from app.targeting.runtime import register_targeting_runtime
 register_targeting_runtime()

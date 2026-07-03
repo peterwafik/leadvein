@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 
-from fastapi import APIRouter, Depends, Request, Form
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.core.compliance import audit
-from app.core.db import (BuyerAccount, Lead, LeadCategoryLink, LeadRecipe, PurchasedLead,
-                         SuppressionList, SuppressionEntry, CreditTransaction, _now)
+from app.core.db import (BuyerAccount, Lead, PurchasedLead,
+                         Segment, SuppressionList, SuppressionEntry, CreditTransaction, _now)
 from app.core.export_leads import export_purchased_csv
-from app.core.marketplace import search, estimate
 from app.core.masking import unlock_view, assert_owned
+from app.quality.visibility import with_quality
 from app.core.purchasing import (unlock_lead, balance, InsufficientCredits,
                                  LeadSuppressed, ComplianceNotAcknowledged)
-from app.core.recipes import DEFAULT_FILTERS
-from app.core.targeting.segments import (create_segment, list_segments,
-                                         get_owned, delete_segment)
+from app.core.targeting.segments import (create_segment, get_owned, delete_segment)
 from app.web.csrf import ensure_csrf, csrf_protect, csrf_protect_json
 from app.web.deps import templates, get_session, current_user, redirect
 
@@ -30,14 +29,6 @@ def _buyer(request: Request, session: Session):
     return u
 
 
-def _filters_from_form(form) -> dict:
-    cats = [c.strip() for c in (form.get("categories", "") or "").split(",") if c.strip()]
-    return {**DEFAULT_FILTERS, "categories": cats, "city": form.get("city", ""),
-            "min_score": int(form.get("min_score") or 0),
-            "require_phone": form.get("require_phone") == "on",
-            "require_website": form.get("require_website") == "on",
-            "freshness_days": int(form.get("freshness_days") or 0)}
-
 
 @router.get("")
 def dashboard(request: Request, session: Session = Depends(get_session)):
@@ -47,22 +38,13 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     ba = session.get(BuyerAccount, u.buyer_account_id)
     n_purchased = len(session.exec(select(PurchasedLead).where(
         PurchasedLead.buyer_account_id == ba.id)).all())
-    n_recipes = len(session.exec(select(LeadRecipe).where(
-        LeadRecipe.buyer_account_id == ba.id)).all())
+    n_recipes = len(session.exec(select(Segment).where(
+        Segment.buyer_account_id == ba.id)).all())
     return templates.TemplateResponse(request, "dashboard.html", {
         "request": request, "user": u, "credits": ba.credits,
         "n_purchased": n_purchased, "n_recipes": n_recipes,
         "acked": bool(ba.compliance_ack_at)})
 
-
-def _inventory_options(session: Session) -> dict:
-    """Data-driven filter options: the cities and categories that ACTUALLY exist in
-    inventory. Grows automatically as more is ingested — never a hardcoded list."""
-    cities = [c for c in session.exec(
-        select(Lead.city).where(Lead.city != "").distinct()).all() if c]
-    cats = [c for c in session.exec(
-        select(LeadCategoryLink.category_key).distinct()).all() if c]
-    return {"cities": sorted(set(cities)), "cat_options": sorted(set(cats))}
 
 
 @router.get("/marketplace")
@@ -70,9 +52,7 @@ def marketplace_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    return templates.TemplateResponse(request, "marketplace.html", {
-        "request": request, "user": u, "results": None, "csrf": ensure_csrf(request),
-        **_inventory_options(session)})
+    return redirect("/app/find?mode=quick")
 
 
 @router.get("/campaigns")
@@ -80,38 +60,23 @@ def campaigns_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    from app.campaigns.crud import list_active
-    campaigns = list_active(session)
-    return templates.TemplateResponse(request, "campaigns.html", {
-        "request": request, "user": u, "campaigns": campaigns,
-        "csrf": ensure_csrf(request)})
+    return redirect("/app/find")
 
 
 @router.get("/campaign-preview")
 def campaign_preview(request: Request, session: Session = Depends(get_session)):
-    # DESIGN PREVIEW ONLY — the Campaign layer + Targeting v2 predicate catalog are
-    # approved specs, not yet built. This route renders a static click-through of the
-    # TARGET UX so it can be reacted to; it wires to no engine.
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    return templates.TemplateResponse(request, "campaign_preview.html", {
-        "request": request, "user": u, "csrf": ensure_csrf(request)})
+    return redirect("/app/find")
 
 
-@router.post("/marketplace/search", dependencies=[Depends(csrf_protect)])
+@router.post("/marketplace/search")
 async def marketplace_search(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    form = await request.form()
-    filters = _filters_from_form(form)
-    results = search(session, u.buyer_account_id, filters)
-    est = estimate(session, u.buyer_account_id, filters)
-    return templates.TemplateResponse(request, "marketplace.html", {
-        "request": request, "user": u, "results": results, "estimate": est,
-        "filters": filters, "credits": balance(session, u.buyer_account_id),
-        "csrf": ensure_csrf(request), **_inventory_options(session)})
+    return redirect("/app/find?mode=quick")
 
 
 @router.post("/unlock/{lead_id}", dependencies=[Depends(csrf_protect)])
@@ -124,7 +89,7 @@ def unlock(request: Request, lead_id: int, session: Session = Depends(get_sessio
     except ComplianceNotAcknowledged:
         return redirect("/app/ack")
     except (InsufficientCredits, LeadSuppressed, ValueError):
-        return redirect("/app/marketplace")
+        return redirect("/app/find")
     return redirect("/app/purchased")
 
 
@@ -135,8 +100,13 @@ def purchased(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     purchases = session.exec(select(PurchasedLead).where(
         PurchasedLead.buyer_account_id == u.buyer_account_id)).all()
-    rows = [unlock_view(session.get(Lead, p.lead_id)) | {"status": p.status,
-            "purchased_at": p.purchased_at} for p in purchases if session.get(Lead, p.lead_id)]
+    rows = []
+    for p in purchases:
+        lead = session.get(Lead, p.lead_id)
+        if not lead:
+            continue
+        rows.append(with_quality(unlock_view(lead), lead) |
+                    {"status": p.status, "purchased_at": p.purchased_at})
     return templates.TemplateResponse(request, "purchased.html", {
         "request": request, "user": u, "rows": rows})
 
@@ -152,7 +122,10 @@ def purchased_detail(request: Request, lead_id: int,
     except PermissionError:
         return redirect("/app/purchased")
     audit(session, u.id, "view_detail", "Lead", str(lead_id), {})
-    lead = unlock_view(session.get(Lead, lead_id))
+    lead_obj = session.get(Lead, lead_id)
+    if not lead_obj:
+        return redirect("/app/purchased")
+    lead = with_quality(unlock_view(lead_obj), lead_obj)
     return templates.TemplateResponse(request, "lead_detail.html", {
         "request": request, "user": u, "lead": lead})
 
@@ -185,7 +158,7 @@ def ack_submit(request: Request, session: Session = Depends(get_session)):
     ba.compliance_ack_at = _now()
     session.add(ba); session.commit()
     audit(session, u.id, "compliance_ack", "BuyerAccount", str(ba.id), {})
-    return redirect("/app/marketplace")
+    return redirect("/app/find")
 
 
 @router.get("/recipes")
@@ -193,10 +166,7 @@ def recipes_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    recs = session.exec(select(LeadRecipe).where(
-        LeadRecipe.buyer_account_id == u.buyer_account_id)).all()
-    return templates.TemplateResponse(request, "recipes.html", {
-        "request": request, "user": u, "recipes": recs, "csrf": ensure_csrf(request)})
+    return redirect("/app/audiences")
 
 
 @router.post("/recipes", dependencies=[Depends(csrf_protect)])
@@ -204,13 +174,7 @@ async def recipes_save(request: Request, session: Session = Depends(get_session)
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    form = await request.form()
-    rec = LeadRecipe(buyer_account_id=u.buyer_account_id,
-                     name=form.get("name", "Recipe"),
-                     filters_json=json.dumps(_filters_from_form(form)),
-                     scoring_profile_key=form.get("scoring_profile_key", "utility_energy"))
-    session.add(rec); session.commit()
-    return redirect("/app/recipes")
+    return redirect("/app/audiences")
 
 
 @router.get("/billing")
@@ -238,32 +202,13 @@ def composer_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    from app.core.targeting.composer import predicate_options
-    from app.fingerprints import library as fp_library
-    ctx: dict = {
-        "request": request, "user": u, "csrf": ensure_csrf(request),
-        "options": predicate_options(session), "credits": balance(session, u.buyer_account_id),
-        "tech_recipes": fp_library.list_recipes(session),
-        **_inventory_options(session),
-    }
-    segment_id = request.query_params.get("segment")
-    if segment_id:
-        try:
-            seg = get_owned(session, int(segment_id), u.buyer_account_id)
-            if seg:
-                ctx["preset"] = seg.composition_json
-        except (ValueError, TypeError):
-            pass
-    campaign_key = request.query_params.get("campaign")
-    if campaign_key:
-        from app.campaigns.crud import get_by_key as get_campaign_by_key
-        campaign = get_campaign_by_key(session, campaign_key)
-        if campaign:
-            ctx["campaign"] = campaign
-            ctx["campaign_param_schema"] = json.loads(campaign.param_schema)
-            audit(session, u.id, "campaign.select", "Campaign", campaign_key,
-                  {"key": campaign_key, "phase": "page_load"})
-    return templates.TemplateResponse(request, "composer.html", ctx)
+    campaign = request.query_params.get("campaign", "")
+    segment = request.query_params.get("segment", "")
+    if campaign:
+        return redirect(f"/app/find?campaign={urllib.parse.quote(campaign, safe='')}")
+    if segment:
+        return redirect(f"/app/find?audience={urllib.parse.quote(segment, safe='')}")
+    return redirect("/app/find")
 
 
 @router.post("/composer/save", dependencies=[Depends(csrf_protect)])
@@ -280,7 +225,7 @@ async def composer_save(request: Request, session: Session = Depends(get_session
     except (json.JSONDecodeError, TypeError):
         composition = {"op": "AND", "nodes": []}
     create_segment(session, u.buyer_account_id, name, composition, origin_key=origin_key)
-    return redirect("/app/segments")
+    return redirect("/app/audiences")
 
 
 @router.get("/segments")
@@ -288,10 +233,7 @@ def segments_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
-    segs = list_segments(session, u.buyer_account_id)
-    return templates.TemplateResponse(request, "segments.html", {
-        "request": request, "user": u, "segments": segs,
-        "csrf": ensure_csrf(request)})
+    return redirect("/app/audiences")
 
 
 @router.post("/segments/{segment_id}/delete", dependencies=[Depends(csrf_protect)])
@@ -301,7 +243,7 @@ def segment_delete(request: Request, segment_id: int,
     if not u:
         return redirect("/login")
     delete_segment(session, segment_id, u.buyer_account_id)
-    return redirect("/app/segments")
+    return redirect("/app/audiences")
 
 
 @router.post("/composer/apply-campaign", dependencies=[Depends(csrf_protect_json)])
@@ -336,6 +278,41 @@ async def composer_apply_campaign(request: Request, session: Session = Depends(g
     })
 
 
+def run_estimate(session, buyer_account_id, body: dict):
+    """Shared estimate: resolves 1..n quality profile keys (honest intersection)."""
+    composition = body.get("composition") or {"op": "AND", "nodes": []}
+    keys = body.get("quality_profile_keys")
+    if not keys:
+        single = body.get("quality_profile_key", "") or ""
+        keys = [single] if single else []
+    profiles = []
+    from app.quality.profiles.registry import get as get_quality_profile
+    for k in keys:
+        try:
+            profiles.append(get_quality_profile(k))
+        except KeyError:
+            pass                       # unknown key → skipped, baseline still gates
+    ctx = None
+    if profiles:
+        from app.quality.profiles.combine import combine_profiles
+        ctx = {"quality_profile": combine_profiles(profiles)}
+    from app.core.targeting.estimate import estimate as targeting_estimate
+    try:
+        sample = max(1, min(60, int(body.get("sample", 9))))
+    except (ValueError, TypeError):
+        sample = 9
+    est = targeting_estimate(session, buyer_account_id, composition,
+                             sample=sample, ctx=ctx)
+    # Enrich masked samples with quality tiers at the web layer (core stays
+    # quality-free). Sample counts are <=60; a per-id refetch is fine.
+    enriched = []
+    for s in est.get("samples", []):
+        lead = session.get(Lead, s.get("lead_id"))
+        enriched.append(with_quality(s, lead) if lead else s)
+    est["samples"] = enriched
+    return est
+
+
 @router.post("/composer/estimate")
 async def composer_estimate(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
@@ -345,16 +322,6 @@ async def composer_estimate(request: Request, session: Session = Depends(get_ses
         body = await request.json()
     except Exception:
         return Response(status_code=400)
-    composition = body.get("composition") or {"op": "AND", "nodes": []}
-    quality_profile_key = body.get("quality_profile_key", "") or ""
-    ctx = None
-    if quality_profile_key:
-        try:
-            from app.quality.profiles.registry import get as get_quality_profile
-            prof = get_quality_profile(quality_profile_key)
-            ctx = {"quality_profile": prof}
-        except KeyError:
-            pass  # Unknown key → baseline only, never 500
     # Audit campaign.search when estimate is driven by a campaign-derived segment
     segment_id = body.get("segment_id")
     if segment_id:
@@ -365,10 +332,8 @@ async def composer_estimate(request: Request, session: Session = Depends(get_ses
                       {"origin_key": seg.origin_key})
         except (ValueError, TypeError):
             pass
-    from app.core.targeting.estimate import estimate as targeting_estimate
     try:
-        est = targeting_estimate(session, u.buyer_account_id, composition,
-                                 sample=int(body.get("sample", 9)), ctx=ctx)
+        est = run_estimate(session, u.buyer_account_id, body)
     except (ValueError, KeyError, TypeError):
         return Response(status_code=400)
     return est

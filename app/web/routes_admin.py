@@ -83,10 +83,28 @@ def ingest_page(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
     if not u:
         return redirect("/login")
+    from app.core.db import IngestRequest
+    open_requests = session.exec(select(IngestRequest).where(
+        IngestRequest.status == "open").order_by(IngestRequest.created_at)).all()
     # FIX 1a: only show adapters compatible with the generic ingest() runner
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": _generic_ingest_keys(),
-        "result": None, "csrf": ensure_csrf(request)})
+        "result": None, "csrf": ensure_csrf(request),
+        "open_requests": open_requests})
+
+
+@router.post("/ingest-request/{req_id}/close", dependencies=[Depends(csrf_protect)])
+def ingest_request_close(request: Request, req_id: int,
+                         session: Session = Depends(get_session)):
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    from app.core.db import IngestRequest
+    row = session.get(IngestRequest, req_id)
+    if row:
+        row.status = "done"
+        session.add(row); session.commit()
+    return redirect("/admin/ingest")
 
 
 @router.post("/ingest", dependencies=[Depends(csrf_protect)])
@@ -118,6 +136,8 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
                     AdapterQuery(area={"city": city}, categories=cats, limit=100),
                     scoring_profile_key=scoring_profile_key,
                     enrich_fn=_enrich_for_admin, actor_user_id=u.id)
+    from app.geo.coverage import invalidate_geo_counts
+    invalidate_geo_counts()
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": _generic_ingest_keys(),
         "result": counts, "csrf": ensure_csrf(request)})

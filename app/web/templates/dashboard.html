@@ -3,7 +3,7 @@
 {% block heading %}Dashboard{% endblock %}
 {% block topbar %}{{ ui.credits_pill(credits if credits is defined else '—') }}{% endblock %}
 {% block body %}
-{{ ui.page_intro('Welcome back', 'A quick snapshot of your account. Browse the marketplace to find and unlock leads.') }}
+{{ ui.page_intro('Welcome back', 'A quick snapshot of your account. Use Find leads to build targeting and unlock leads.') }}
 
 {% if not acked %}
   {{ ui.banner('You must accept the compliance terms before your first purchase. <a href="/app/ack" class="underline font-semibold">Review &amp; accept &rarr;</a>', 'warn') }}
@@ -28,15 +28,15 @@
 
   {% call ui.card() %}
   <div class="p-5">
-    <p class="text-[12px] font-semibold uppercase tracking-wider text-ink-400">Saved searches</p>
+    <p class="text-[12px] font-semibold uppercase tracking-wider text-ink-400">Saved audiences</p>
     <p class="mt-1.5 text-3xl font-bold text-ink-900">{{ n_recipes }}</p>
-    <p class="mt-0.5 text-[13px] text-ink-500">search recipes saved</p>
+    <p class="mt-0.5 text-[13px] text-ink-500">audiences saved</p>
   </div>
   {% endcall %}
 </div>
 
 <div class="mt-6 flex flex-wrap gap-3">
-  {{ ui.btn('Browse marketplace', href='/app/marketplace', kind='primary') }}
+  {{ ui.btn('Find leads', href='/app/find', kind='primary') }}
   {{ ui.btn('View purchases', href='/app/purchased', kind='secondary') }}
   {{ ui.btn('Billing & credits', href='/app/billing', kind='secondary') }}
 </div>

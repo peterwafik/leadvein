@@ -32,15 +32,23 @@ def _login(c: TestClient) -> str:
     return token
 
 
-# ── (a) GET /app/campaigns → 200, both campaign names present ──────────────
+# ── (a) GET /app/campaigns → 303 redirect to /app/find ─────────────────────
+# Old assert: GET /app/campaigns returned 200 with campaign names in page HTML.
+# New assert: GET /app/campaigns redirects to /app/find (campaigns page retired).
+# Reason: /app/campaigns is now a redirect stub; campaigns are listed on /app/find.
 
 def test_campaigns_page_lists_both_campaigns():
     c = _client()
     _login(c)
-    r = c.get("/app/campaigns")
-    assert r.status_code == 200
-    assert "Utilities (UK)" in r.text
-    assert "Business Restructuring" in r.text
+    r = c.get("/app/campaigns", follow_redirects=False)
+    assert r.status_code in (301, 302, 303, 307, 308), \
+        f"expected redirect from retired /app/campaigns, got {r.status_code}"
+    assert r.headers.get("location", "").startswith("/app/find"), \
+        f"expected redirect to /app/find, got {r.headers.get('location', '')}"
+    # Campaign names now surface on /app/find (verified by test_find_routes.py)
+    find_page = c.get("/app/find")
+    assert "Utilities (UK)" in find_page.text
+    assert "Business Restructuring" in find_page.text
 
 
 # ── (b) POST /app/composer/apply-campaign → composition + quality key ──────

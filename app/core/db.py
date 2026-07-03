@@ -239,6 +239,17 @@ class AttributeCoverage(SQLModel, table=True):
     updated_at: str = Field(default_factory=_now)
 
 
+class IngestRequest(SQLModel, table=True):
+    """A queued request to ingest coverage for a named area. Ingestion itself
+    remains an admin action; this row only records the ask."""
+    id: int | None = Field(default=None, primary_key=True)
+    country: str = ""
+    area: str = ""
+    requested_by: int = 0          # User.id
+    status: str = "open"           # open | done | dismissed
+    created_at: str = Field(default_factory=_now)
+
+
 def init_db(url: str = "sqlite:///leadvault.db"):
     engine = create_engine(url, connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
