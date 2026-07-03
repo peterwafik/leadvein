@@ -50,6 +50,9 @@ def download_extract(region_key: str, *, dest_dir: str = os.path.join("var", "pb
 
 
 class _Geofabrik:
+    # driven by the background bulk-import job, not the synchronous discover/normalize ingest
+    bulk_only = True
+
     meta = SourceMeta(key="osm_geofabrik", name="OpenStreetMap (Geofabrik extract)",
                       type="open_data", url=BASE, license="ODbL", key_env="")
 

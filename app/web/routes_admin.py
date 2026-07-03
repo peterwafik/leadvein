@@ -36,10 +36,16 @@ def _generic_ingest_keys() -> list[str]:
     FIX 1a: fingerprint_discovery adapters require a ``session`` keyword on
     discover()/normalize() and use ingest_normalized (not ingest).  They MUST
     NOT be surfaced in the generic ingest dropdown or executed by ingest_run.
+
+    bulk_only adapters (e.g. osm_geofabrik) are driven by the background
+    bulk-import job and raise NotImplementedError in discover/normalize — they
+    MUST also be excluded, regardless of their meta.type (which may coincide
+    with legitimate sync adapters such as osm_overpass / open_data).
     """
     return [
         k for k in adapter_registry.all_keys()
         if adapter_registry.get(k).meta.type != "fingerprint_discovery"
+        and not getattr(adapter_registry.get(k), "bulk_only", False)
     ]
 
 
