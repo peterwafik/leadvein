@@ -173,6 +173,12 @@ def merge_or_create(
         if not existing_cats and normalized.category_keys:
             existing.category_keys_json = json.dumps(normalized.category_keys)
             stamp_provenance(existing, "category_keys", source_key, license)
+            # Keep the normalized link index in sync so LeadCategoryLink rows
+            # reflect the newly written category_keys_json.  Covers ALL callers
+            # (bulk, fingerprint ingest_normalized, waterfall merges).
+            # existing.id is already set (row was found by find_existing/flush).
+            from app.core.leadcats import sync_lead_categories
+            sync_lead_categories(session, existing)
 
         # Attributes: per-key waterfall — add only keys absent from existing.
         existing_attrs: dict = json.loads(existing.attributes_json or "{}")

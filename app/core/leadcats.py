@@ -8,11 +8,15 @@ from app.core.db import LeadCategoryLink
 
 
 def sync_lead_categories(session: Session, lead) -> None:
-    """(Re)build the normalized category links for a lead from its category_keys_json."""
+    """(Re)build the normalized category links for a lead from its category_keys_json.
+
+    Does NOT commit — callers are responsible for committing after their
+    batch/loop so that category writes are part of the same transaction as the
+    lead write (preserving batch-commit integrity in bulk.py and ingest()).
+    """
     session.exec(delete(LeadCategoryLink).where(LeadCategoryLink.lead_id == lead.id))
     for key in json.loads(lead.category_keys_json or "[]"):
         session.add(LeadCategoryLink(lead_id=lead.id, category_key=key))
-    session.commit()
 
 
 def lead_ids_for_categories(session: Session, category_keys) -> set:

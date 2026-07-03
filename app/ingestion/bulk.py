@@ -11,6 +11,10 @@ matching leads internally (apply_file completes before first yield). The
 cancel_check between yields therefore stops IMPORTING promptly but cannot
 stop PARSING. This is acceptable because parsing is the cheap half of the
 work; the large wall-clock cost is the network download and DB writes.
+
+NOTE on ``hot`` semantics: ``hot`` counts every lead TOUCHED this run whose
+post-merge tier_contact >= "validated".  A re-import will count already-hot
+merged leads again.  It is NOT "leads made hot by this run".
 """
 from __future__ import annotations
 
@@ -78,6 +82,8 @@ def run_bulk_import(
         "merged": 0,
         "skipped_compliance": 0,
         "skipped_duplicate_in_run": 0,
+        # hot: leads TOUCHED this run with tier_contact >= "validated".
+        # A re-import recounts already-hot merged leads; not "made hot this run".
         "hot": 0,
     }
 

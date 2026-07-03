@@ -7,7 +7,7 @@ import os
 from sqlmodel import Session, select
 
 import app.leadvault as lv
-from app.core.db import Lead
+from app.core.db import Lead, LeadCategoryLink, init_db
 from app.ingestion.bulk import run_bulk_import
 from app.quality.ordinals import ordinal
 
@@ -68,3 +68,38 @@ def test_dedup_within_run():
     with Session(lv.engine) as s:
         counts = _run(s)
         assert counts["skipped_duplicate_in_run"] >= 1 or counts["merged"] >= 1
+
+
+def test_merge_category_fill_syncs_link_index():
+    """Regression: category-filling merges must propagate into LeadCategoryLink.
+
+    Construction: create a category-less Lead whose dedupe_key matches Fixture
+    Bakery (phone:441865111111).  After the bulk import, merge_or_create fills
+    category_keys_json and sync_lead_categories must be called so
+    LeadCategoryLink rows exist for the lead.
+    """
+    engine = init_db("sqlite://")
+    with Session(engine) as s:
+        # Seed a lead with empty categories whose dedupe_key matches Fixture Bakery.
+        bare = Lead(
+            business_name="Pre-existing Bakery Stub",
+            category_keys_json=json.dumps([]),
+            dedupe_key="phone:441865111111",
+        )
+        s.add(bare)
+        s.commit()
+        s.refresh(bare)
+        lead_id = bare.id
+
+        # Bulk-import the fixture — Fixture Bakery merges into the bare lead
+        # and category_keys_json is filled with at least ["bakery"].
+        run_bulk_import(s, "monaco", pbf_path=FIXTURE)
+
+        # The normalized link index must now be populated for the lead.
+        links = s.exec(
+            select(LeadCategoryLink).where(LeadCategoryLink.lead_id == lead_id)
+        ).all()
+        assert len(links) > 0, (
+            "sync_lead_categories was not called after category-fill merge: "
+            "LeadCategoryLink rows are missing for the merged lead"
+        )
