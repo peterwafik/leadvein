@@ -51,7 +51,10 @@ def _login_buyer(c):
 
 
 def test_save_segment_creates_and_lists():
-    """POST /app/composer/save stores a Segment; GET /app/segments lists it."""
+    """POST /app/composer/save stores a Segment; GET /app/audiences lists it."""
+    # Old assert: redirect to /app/segments, then GET /app/segments renders 200 with name.
+    # New assert: redirect to /app/audiences (segments retired); /app/audiences renders name.
+    # Reason: composer_save and segments_page both redirect to /app/audiences per Task 10.
     import app.leadvault as lv
     from sqlmodel import select
     from app.core.db import User
@@ -64,14 +67,14 @@ def test_save_segment_creates_and_lists():
         {"predicate": "geo.country", "params": {"value": "GB"}, "negate": False}
     ]}
 
-    # POST save — should redirect to /app/segments
+    # POST save — now redirects to /app/audiences (not /app/segments)
     r = c.post("/app/composer/save", data={
         "csrf_token": token,
         "name": "UK Leads",
         "composition": json.dumps(composition),
     }, follow_redirects=False)
     assert r.status_code in (302, 303), f"expected redirect, got {r.status_code}"
-    assert "/app/segments" in r.headers.get("location", "")
+    assert "/app/audiences" in r.headers.get("location", "")
 
     # Verify it exists in the DB under the demo buyer account
     with Session(lv.engine) as s:
@@ -83,8 +86,8 @@ def test_save_segment_creates_and_lists():
         seg = next(seg for seg in segs if seg.name == "UK Leads")
         assert json.loads(seg.composition_json) == composition
 
-    # GET /app/segments renders the segment name
-    page = c.get("/app/segments")
+    # GET /app/audiences renders the segment name (new unified page)
+    page = c.get("/app/audiences")
     assert page.status_code == 200
     assert "UK Leads" in page.text
 
@@ -125,7 +128,10 @@ def test_segment_ownership_and_delete_isolation():
 
 
 def test_delete_segment_via_http():
-    """POST /app/segments/{id}/delete removes the segment and redirects."""
+    """POST /app/segments/{id}/delete removes the segment and redirects to /app/audiences."""
+    # Old assert: redirect location contains /app/segments.
+    # New assert: redirect location contains /app/audiences (segment listing moved there).
+    # Reason: segment_delete final redirect updated to /app/audiences per Task 10.
     import app.leadvault as lv
     from sqlmodel import select
     from app.core.db import User
@@ -142,11 +148,11 @@ def test_delete_segment_via_http():
         seg = create_segment(s, ba_id, "To Be Deleted", comp)
         seg_id = seg.id
 
-    # Delete via HTTP
+    # Delete via HTTP — now redirects to /app/audiences (not /app/segments)
     r = c.post(f"/app/segments/{seg_id}/delete", data={"csrf_token": token},
                follow_redirects=False)
     assert r.status_code in (302, 303), f"expected redirect, got {r.status_code}"
-    assert "/app/segments" in r.headers.get("location", "")
+    assert "/app/audiences" in r.headers.get("location", "")
 
     # Verify it is gone
     with Session(lv.engine) as s:
@@ -156,8 +162,10 @@ def test_delete_segment_via_http():
 
 
 def test_composer_get_with_segment_preset():
-    """GET /app/composer?segment=<id> passes composition_json as 'preset' to the template
-    AND the template wires JS consumption so the builder is rehydrated on load."""
+    """GET /app/composer?segment=<id> redirects to /app/find?audience=<id>."""
+    # Old assert: GET /app/composer?segment=N returned 200 with window._segmentPreset in HTML.
+    # New assert: GET /app/composer?segment=N redirects to /app/find?audience=N (composer retired).
+    # Reason: /app/composer is now a redirect stub; segment preset loading moved to /app/find.
     import app.leadvault as lv
     from sqlmodel import select
     from app.core.db import User
@@ -175,20 +183,14 @@ def test_composer_get_with_segment_preset():
         seg = create_segment(s, ba_id, "London Test Segment", comp)
         seg_id = seg.id
 
-    # GET composer with segment param
-    r = c.get(f"/app/composer?segment={seg_id}")
-    assert r.status_code == 200
-    # The preset JSON must be embedded in the page (the assignment side)
-    assert "London" in r.text
-    assert "window._segmentPreset" in r.text
-    # The page must ALSO wire the consumption — the IIFE reads _segmentPreset back.
-    # Assignment pattern:  window._segmentPreset = <json>
-    # Consumption pattern: const p = window._segmentPreset  (read into a variable)
-    # If this assertion fails, the "Open segment" preset load is dead code.
-    assert "= window._segmentPreset" in r.text, (
-        "composer JS must READ _segmentPreset (consumption hook missing — "
-        "loading a saved segment would silently open an empty builder)"
-    )
+    # GET composer with segment param — must now redirect carrying audience=<id>
+    r = c.get(f"/app/composer?segment={seg_id}", follow_redirects=False)
+    assert r.status_code in (301, 302, 303, 307, 308), \
+        f"expected redirect from retired /app/composer, got {r.status_code}"
+    location = r.headers.get("location", "")
+    assert location.startswith("/app/find"), f"expected redirect to /app/find, got {location}"
+    assert f"audience={seg_id}" in location, \
+        f"expected audience={seg_id} in redirect location, got {location}"
 
 
 def test_composer_estimate_bad_predicate_returns_400():

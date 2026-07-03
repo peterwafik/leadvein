@@ -53,13 +53,17 @@ def test_full_buyer_journey(monkeypatch):
     token = _token_from(login_page)
     c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345",
                            "csrf_token": token})
-    # marketplace search returns a MASKED card (no business name / contact)
+    # marketplace search now redirects to /app/find (marketplace page retired)
+    # Old assert: POST /app/marketplace/search returned 200 with masked results HTML.
+    # New assert: POST /app/marketplace/search redirects to /app/find?mode=quick.
+    # Reason: marketplace_search is now a redirect stub per Task 10; lead search moved to /app/find.
     r = c.post("/app/marketplace/search",
                data={"categories": "restaurant", "city": "London", "min_score": "50",
-                     "csrf_token": token})
-    assert r.status_code == 200
-    assert "Hidden Diner" not in r.text and "hiddendiner.co.uk" not in r.text
-    assert "85" in r.text  # score visible
+                     "csrf_token": token}, follow_redirects=False)
+    assert r.status_code in (301, 302, 303, 307, 308), \
+        f"expected redirect from retired marketplace search, got {r.status_code}"
+    assert "/app/find" in r.headers.get("location", ""), \
+        f"expected redirect to /app/find, got {r.headers.get('location', '')}"
     # accept compliance, then unlock
     c.post("/app/ack", data={"csrf_token": token})
     lead_id = None

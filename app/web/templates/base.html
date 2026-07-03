@@ -70,12 +70,9 @@
         {{ nav('/admin/optouts','Opt-outs', ic.shield) }}
         {{ nav('/admin/audit','Audit log', ic.cog) }}
       {% else %}
-        <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Find leads</p>
         {{ nav('/app','Dashboard', ic.home) }}
-        {{ nav('/app/marketplace','Marketplace', ic.target) }}
-        {{ nav('/app/composer','Composer', ic.target) }}
-        {{ nav('/app/campaigns','Campaigns', ic.flame) }}
-        {{ nav('/app/segments','Saved searches', ic.grid) }}
+        {{ nav('/app/find','Find leads', ic.target) }}
+        {{ nav('/app/audiences','Saved audiences', ic.grid) }}
         <p class="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Manage</p>
         {{ nav('/app/purchased','Purchased leads', ic.inbox) }}
         {{ nav('/app/suppression','Suppression', ic.shield) }}
