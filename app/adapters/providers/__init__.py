@@ -20,7 +20,9 @@ def register_providers() -> None:
     from app.adapters.providers.companies_house import CompaniesHouseAdapter
     from app.adapters.providers.hunter import HunterAdapter
     from app.adapters.providers.fingerprint_discovery import FingerprintDiscoveryAdapter
+    from app.adapters.geofabrik import GEOFABRIK
 
     registry.register(CompaniesHouseAdapter())
     registry.register(HunterAdapter())
     registry.register(FingerprintDiscoveryAdapter())
+    registry.register(GEOFABRIK)
