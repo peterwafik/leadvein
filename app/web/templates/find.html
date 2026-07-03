@@ -468,17 +468,15 @@
   const nn = $('[data-nav-next]'); if (nn) nn.addEventListener('click', () => setStep(Math.min(5, state.step + 1)));
 
   /* ── Step 1: campaign cards ────────────────────────────────────────────── */
-  $$('[data-campaign-card]').forEach(card => card.addEventListener('click', async () => {
+  $$('[data-campaign-card]').forEach(card => card.addEventListener('click', () => {
     const key = card.dataset.campaignCard || '';
-    state.campaignKey = key;
-    const origin = $('[data-save-origin]'); if (origin) origin.value = key;
     if (key) {
-      // Load prefill from server for this campaign
-      try {
-        const res = await fetch('/app/find?campaign=' + encodeURIComponent(key), { headers: { 'X-Requested-With': 'fetch' } });
-        // We already have prefill for the initially-loaded campaign only; otherwise reset.
-      } catch (e) {}
+      // Full navigation so the server injects window._prefill, which the bootstrap
+      // below then consumes to fill answers + jump to step 2.
+      window.location = '/app/find?campaign=' + encodeURIComponent(key);
+      return;
     }
+    // "Describe your own" card — no campaign key, just advance to step 2.
     setStep(2);
   }));
 
@@ -628,8 +626,10 @@
     if (!box) return;
     box.querySelectorAll('[data-chip]').forEach(c => c.remove());
     const empty = $('[data-geo-empty]');
+    const _codeToName = {};
+    _lastCountries.forEach(ct => { _codeToName[ct.code] = ct.name; });
     const items = []
-      .concat(state.answers.whole_countries.map(c => ({ label: 'Whole country: ' + c, kind: 'whole', val: c })))
+      .concat(state.answers.whole_countries.map(c => ({ label: 'Whole country: ' + (_codeToName[c] || c), kind: 'whole', val: c })))
       .concat(state.answers.regions.map(r => ({ label: r, kind: 'region', val: r })))
       .concat(state.answers.cities.map(c => ({ label: c, kind: 'city', val: c })));
     if (empty) empty.style.display = items.length ? 'none' : '';
@@ -913,9 +913,11 @@
 
   /* ── Compile + estimate (debounced) ────────────────────────────────────── */
   let compileTimer = null;
+  let _estimateSeq = 0;
   function compileAndEstimate() { clearTimeout(compileTimer); compileTimer = setTimeout(_run, 350); }
 
   async function _run() {
+    const seq = ++_estimateSeq;
     const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
     // 1) compile from answers (always — provides the sentence + quality keys)
     try {
@@ -924,10 +926,12 @@
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
         body: JSON.stringify({ campaign_key: state.campaignKey, answers: state.answers })
       });
+      if (seq !== _estimateSeq) return;
       if (cRes.ok) { state.compiled = await cRes.json(); }
       else if (cRes.status !== 401) { showError(); }
-    } catch (e) { showError(); }
+    } catch (e) { if (seq !== _estimateSeq) return; showError(); }
 
+    if (seq !== _estimateSeq) return;
     renderSentence(usingAdvanced);
     renderGated(state.compiled ? state.compiled.gated_notices : []);
 
@@ -943,9 +947,10 @@
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
         body: JSON.stringify({ composition: composition, quality_profile_keys: qkeys, sample: 6 })
       });
+      if (seq !== _estimateSeq) return;
       if (!eRes.ok) { if (eRes.status !== 401) showError(); return; }
       renderEstimate(await eRes.json());
-    } catch (e) { showError(); }
+    } catch (e) { if (seq !== _estimateSeq) return; showError(); }
   }
 
   function renderSentence(usingAdvanced) {
