@@ -12,6 +12,7 @@ from app.core.db import (BuyerAccount, Lead, LeadRecipe, PurchasedLead,
                          SuppressionList, SuppressionEntry, CreditTransaction, _now)
 from app.core.export_leads import export_purchased_csv
 from app.core.masking import unlock_view, assert_owned
+from app.quality.visibility import with_quality
 from app.core.purchasing import (unlock_lead, balance, InsufficientCredits,
                                  LeadSuppressed, ComplianceNotAcknowledged)
 from app.core.targeting.segments import (create_segment, get_owned, delete_segment)
@@ -99,8 +100,13 @@ def purchased(request: Request, session: Session = Depends(get_session)):
         return redirect("/login")
     purchases = session.exec(select(PurchasedLead).where(
         PurchasedLead.buyer_account_id == u.buyer_account_id)).all()
-    rows = [unlock_view(session.get(Lead, p.lead_id)) | {"status": p.status,
-            "purchased_at": p.purchased_at} for p in purchases if session.get(Lead, p.lead_id)]
+    rows = []
+    for p in purchases:
+        lead = session.get(Lead, p.lead_id)
+        if not lead:
+            continue
+        rows.append(with_quality(unlock_view(lead), lead) |
+                    {"status": p.status, "purchased_at": p.purchased_at})
     return templates.TemplateResponse(request, "purchased.html", {
         "request": request, "user": u, "rows": rows})
 
@@ -116,7 +122,8 @@ def purchased_detail(request: Request, lead_id: int,
     except PermissionError:
         return redirect("/app/purchased")
     audit(session, u.id, "view_detail", "Lead", str(lead_id), {})
-    lead = unlock_view(session.get(Lead, lead_id))
+    lead_obj = session.get(Lead, lead_id)
+    lead = with_quality(unlock_view(lead_obj), lead_obj)
     return templates.TemplateResponse(request, "lead_detail.html", {
         "request": request, "user": u, "lead": lead})
 
@@ -288,8 +295,16 @@ def run_estimate(session, buyer_account_id, body: dict):
         from app.quality.profiles.combine import combine_profiles
         ctx = {"quality_profile": combine_profiles(profiles)}
     from app.core.targeting.estimate import estimate as targeting_estimate
-    return targeting_estimate(session, buyer_account_id, composition,
-                              sample=int(body.get("sample", 9)), ctx=ctx)
+    est = targeting_estimate(session, buyer_account_id, composition,
+                             sample=int(body.get("sample", 9)), ctx=ctx)
+    # Enrich masked samples with quality tiers at the web layer (core stays
+    # quality-free). Sample counts are <=60; a per-id refetch is fine.
+    enriched = []
+    for s in est.get("samples", []):
+        lead = session.get(Lead, s.get("lead_id"))
+        enriched.append(with_quality(s, lead) if lead else s)
+    est["samples"] = enriched
+    return est
 
 
 @router.post("/composer/estimate")

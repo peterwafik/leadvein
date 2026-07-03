@@ -9,6 +9,7 @@ from sqlmodel import Session
 import app.leadvault as lv
 from app.core.db import Lead
 from app.core.masking import mask_preview
+from app.quality.visibility import with_quality
 
 
 def _lead(**kw):
@@ -27,8 +28,9 @@ def _lead(**kw):
     return Lead(**defaults)
 
 
-def test_mask_preview_exposes_tiers_never_values():
-    p = mask_preview(_lead())
+def test_with_quality_exposes_tiers_never_values():
+    lead = _lead()
+    p = with_quality(mask_preview(lead), lead)   # tiers enriched at the web layer
     assert p["quality"]["phone"]["tier"] == "validated"
     assert p["quality"]["phone"]["line_type"] == "fixed_line"
     assert p["quality"]["email"]["tier"] == "present"
@@ -38,9 +40,9 @@ def test_mask_preview_exposes_tiers_never_values():
     assert "visbakery.example" not in blob
 
 
-def test_mask_preview_never_shows_verified_live_from_self_run():   # INV-Q2
+def test_with_quality_never_shows_verified_live_from_self_run():   # INV-Q2
     lead = _lead()
-    p = mask_preview(lead)
+    p = with_quality(mask_preview(lead), lead)
     assert all(f.get("tier") != "verified_live" for f in p["quality"].values())
 
 
@@ -66,3 +68,27 @@ def test_lead_detail_renders_tiers_and_locked_verified():
     assert "format + line type" in html
     assert "Verified-live" in html and "requires licensed provider" in html
     assert "data-tier-locked" in html
+
+
+def test_estimate_samples_carry_quality_and_stay_leak_free():
+    # Task-10 minor closed: estimate samples are enriched with tiers at the web
+    # layer and must still never leak raw contact values.
+    with Session(lv.engine) as s:
+        lead = _lead(business_name="Estimate Leaky Co",
+                     phone="+441223999888", public_email="secret@leaky.example")
+        s.add(lead); s.commit()
+    c = TestClient(lv.app)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"email": "buyer@demo.local", "password": "buyer12345",
+                           "csrf_token": token}, follow_redirects=False)
+    r = c.post("/app/find/estimate",
+               json={"composition": {"op": "AND", "nodes": []}, "sample": 60},
+               headers={"X-CSRF-Token": token})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["samples"], "estimate must return samples for an empty composition"
+    for s in body["samples"]:
+        assert "quality" in s and "tech_match" in s
+    blob = json.dumps(body)
+    assert "+441223999888" not in blob           # no raw phone
+    assert "leaky.example" not in blob           # no email domain

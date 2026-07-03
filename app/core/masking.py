@@ -6,37 +6,6 @@ from sqlmodel import Session, select
 
 from app.core.db import Lead, PurchasedLead
 
-# Field list for per-field tier extraction (phone, email, address, website, profile).
-_TIER_FIELDS = ("phone", "email", "address", "website", "profile")
-
-# Dict key for the per-field tier summary returned by both public views.
-# Written as a concatenation so the banned word does not appear as a literal
-# inside app/core (INV-Q5 grep invariant).
-_K_TIERS = "qual" + "ity"
-
-
-def _tier_summary(lead: Lead) -> dict:
-    """Per-field validation tiers for display. Tiers only — never contact values.
-    Self-run validation caps at 'validated'; verified_live only arrives via a
-    licensed-source stamp, so passing tiers through cannot overclaim."""
-    v = json.loads(lead.validation_json or "{}")
-    out = {}
-    for f in _TIER_FIELDS:
-        fb = v.get(f) or {}
-        entry = {"tier": fb.get("tier", "absent")}
-        if f == "phone" and fb.get("line_type"):
-            entry["line_type"] = fb["line_type"]
-        out[f] = entry
-    return out
-
-
-def _tech_match(lead: Lead) -> dict | None:
-    attrs = json.loads(lead.attributes_json or "{}")
-    if attrs.get("recipe_key"):
-        return {"recipe_key": attrs["recipe_key"],
-                "strength": int(attrs.get("match_strength") or 1)}
-    return None
-
 
 def mask_preview(lead: Lead) -> dict:
     return {
@@ -52,8 +21,6 @@ def mask_preview(lead: Lead) -> dict:
         "exclusivity_status": lead.exclusivity_status,
         "source_type": lead.source_name,
         "freshness": lead.date_last_verified,
-        _K_TIERS: _tier_summary(lead),
-        "tech_match": _tech_match(lead),
     }
 
 
@@ -74,8 +41,6 @@ def unlock_view(lead: Lead) -> dict:
         "source_name": lead.source_name, "source_url": lead.source_url,
         "source_license": lead.source_license, "attribution": lead.attribution, "lawful_basis": lead.lawful_basis,
         "date_last_verified": lead.date_last_verified,
-        _K_TIERS: _tier_summary(lead),
-        "tech_match": _tech_match(lead),
     }
 
 
