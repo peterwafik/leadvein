@@ -477,6 +477,8 @@
       return;
     }
     // "Describe your own" card — no campaign key, just advance to step 2.
+    state.campaignKey = '';
+    const _o = $('[data-save-origin]'); if (_o) _o.value = '';
     setStep(2);
   }));
 
