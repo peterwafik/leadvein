@@ -72,3 +72,18 @@ def test_extra_clauses_narrow():
             s, {"op": "AND", "nodes": []},
             extra_clauses=[Lead.score_total >= 90])
         assert rows and all(l.score_total >= 90 for l in rows)
+
+
+def test_or_group_with_negated_child_falls_back():
+    comp = {"op": "AND", "nodes": [
+        {"op": "OR", "nodes": [
+            {"predicate": "geo.city_any", "params": {"in": ["Pushtown"]}},
+            {"predicate": "geo.country_any", "params": {"in": ["DE"]}, "negate": True}]}]}
+    with Session(lv.engine) as s:
+        _seed(s)
+        clauses = _pushdown_clauses(s, comp)
+        assert not clauses
+        pushed = {l.id for l in matching_by_composition(s, comp)}
+        pure = {l.id for l in s.exec(select(Lead)).all()
+                if selects(lead_view(l), comp)}
+        assert pushed == pure
