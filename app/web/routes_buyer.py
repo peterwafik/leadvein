@@ -123,6 +123,8 @@ def purchased_detail(request: Request, lead_id: int,
         return redirect("/app/purchased")
     audit(session, u.id, "view_detail", "Lead", str(lead_id), {})
     lead_obj = session.get(Lead, lead_id)
+    if not lead_obj:
+        return redirect("/app/purchased")
     lead = with_quality(unlock_view(lead_obj), lead_obj)
     return templates.TemplateResponse(request, "lead_detail.html", {
         "request": request, "user": u, "lead": lead})
