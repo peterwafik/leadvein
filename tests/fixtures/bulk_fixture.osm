@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="leadvein-test-fixture">
+  <!-- Node 101: Fixture Bakery → lead, category bakery -->
+  <node id="101" lat="51.7501" lon="-1.2501" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Fixture Bakery"/>
+    <tag k="shop" v="bakery"/>
+    <tag k="addr:city" v="Testville"/>
+    <tag k="phone" v="+441865111111"/>
+  </node>
+  <!-- Node 102: Fixture Electrician → lead, category electrician (wildcard craft) -->
+  <node id="102" lat="51.7502" lon="-1.2502" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Fixture Electrician"/>
+    <tag k="craft" v="electrician"/>
+    <tag k="email" v="sparks@fixture.example"/>
+  </node>
+  <!-- Node 103: Fixture Office → lead, category architect (wildcard office) -->
+  <node id="103" lat="51.7503" lon="-1.2503" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Fixture Office"/>
+    <tag k="office" v="architect"/>
+  </node>
+  <!-- Node 104: nameless bakery → skipped (nameless) -->
+  <node id="104" lat="51.7504" lon="-1.2504" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="shop" v="bakery"/>
+  </node>
+  <!-- Node 105: bench → skipped (non-business amenity) -->
+  <node id="105" lat="51.7505" lon="-1.2505" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Fixture Bench"/>
+    <tag k="amenity" v="bench"/>
+  </node>
+  <!-- Node 106: vacant shop → skipped (excluded) -->
+  <node id="106" lat="51.7506" lon="-1.2506" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Vacant Shop"/>
+    <tag k="shop" v="vacant"/>
+  </node>
+  <!-- Node 107: hotel → lead -->
+  <node id="107" lat="51.7507" lon="-1.2507" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Fixture Hotel"/>
+    <tag k="tourism" v="hotel"/>
+    <tag k="website" v="https://hotel.fixture.example"/>
+  </node>
+  <!-- Node 108: healthcare doctor → lead (wildcard healthcare) -->
+  <node id="108" lat="51.7508" lon="-1.2508" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Fixture GP"/>
+    <tag k="healthcare" v="doctor"/>
+  </node>
+  <!-- Node 109: Fixture Dup Bakery → lead (same phone as 101; dedup is Task 6) -->
+  <node id="109" lat="51.7509" lon="-1.2509" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <tag k="name" v="Fixture Dup Bakery"/>
+    <tag k="shop" v="bakery"/>
+    <tag k="phone" v="+441865111111"/>
+  </node>
+  <!-- Bare location nodes for way 301 (no tags, not leads) -->
+  <node id="201" lat="51.7510" lon="-1.2510" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture"/>
+  <node id="202" lat="51.7510" lon="-1.2520" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture"/>
+  <node id="203" lat="51.7520" lon="-1.2520" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture"/>
+  <node id="204" lat="51.7520" lon="-1.2510" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture"/>
+  <!-- Way 301: Fixture Supermarket (closed polygon using nodes 201-204) → lead with centroid -->
+  <way id="301" version="1" timestamp="2024-01-01T00:00:00Z" uid="1" user="fixture">
+    <nd ref="201"/>
+    <nd ref="202"/>
+    <nd ref="203"/>
+    <nd ref="204"/>
+    <nd ref="201"/>
+    <tag k="name" v="Fixture Supermarket"/>
+    <tag k="shop" v="supermarket"/>
+    <tag k="addr:city" v="Testville"/>
+  </way>
+</osm>
