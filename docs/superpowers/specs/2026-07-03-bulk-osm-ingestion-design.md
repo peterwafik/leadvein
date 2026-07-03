@@ -86,6 +86,15 @@ New categories auto-register in `LeadCategory` on first ingest (label = titleize
 
 So: **tens of thousands to low hundreds of thousands of hot leads nationally — not "every business now has a phone."** The ~63% contact-less majority is a data gap only a licensed contact source fills; bulk ingestion maximizes the free tier, nothing more. We will publish the real funnel numbers (raw → deduped → contact-present → gate-cleared) on the admin page after the first import, and the UI keeps showing only honest per-area counts. No gate loosening, ever.
 
+## 4b. Admin bulk unlock & export (owner testing path) — USER ADDITION
+
+Testing at national volume with per-lead credit unlocks is unworkable. Add an ADMIN-only bulk path, **strictly separated in code from the buyer unlock economy**, which stays fully intact for buyers:
+
+- **Access:** admins may VIEW the buyer find/results pages (read-only browse of what buyers would see — same serve gate, same honest counts). Admin-only controls appear there: a select-all checkbox, per-card checkboxes, "Unlock selected", "Unlock all (N)", "Export selected", "Export all" (CSV + XLSX). Buyers never see these controls (test asserts absence for role=buyer).
+- **Semantics:** admin bulk unlock spends NO credits, creates NO `PurchasedLead` rows, does NOT bump `times_sold`/`last_sold_at`, and touches NO `CreditTransaction` — it is an owner capability, not a purchase. It reveals full lead detail (server-side admin-guarded JSON) and enables export. Every bulk action writes ONE audit row (`admin.bulk_unlock` / `admin.bulk_export`) with lead count + composition hash.
+- **Export content:** full unlocked detail per lead — business name, phone, email, website, category keys, address (line1/city/region/postcode/country), lat/lon, score + quality tier per field (phone/email/address/website), freshness date, source name + license + attribution, per-field provenance summary. CSV and XLSX (reuse the existing openpyxl export machinery); ODbL attribution embedded in the file (header/metadata row). Existing CSV formula-injection guard applies.
+- **Honesty boundary unchanged:** the export contains only serveable leads (gate-cleared, not expired/opted-out/suppressed) — the admin path bypasses the *economy*, never the *compliance spine*. Code separation: new admin routes/module; the buyer `unlock_lead` path is untouched and its tests unmodified.
+
 ## 5. What does NOT change
 Fingerprint discovery (precision layer, INV-11..15), Overpass adapter (ad-hoc city pulls), masking, quality gate authority (INV-Q1), suppression/opt-out/retention/audit on bulk leads exactly as today, grep-clean core + AST import boundary (`geofabrik`/`osmium` strings and imports stay OUT of app/core — new code lives in app/adapters + app/ingestion), buyer UI (taxonomy and coverage populate themselves from real data).
 
