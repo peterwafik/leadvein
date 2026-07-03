@@ -127,18 +127,23 @@
         + '</div>';
     }).join('');
 
-    var errorMsg = (c.error)
-      ? '<p class="mt-3 text-sm text-red-600">Error: ' + c.error + '</p>'
-      : '';
-
     sd.innerHTML = '<div class="flex items-center gap-2 mb-3 text-sm">'
       + '<span class="font-medium text-ink-700">Status:</span> '
       + statusBadge
       + '<span class="text-ink-400 ml-2">— job #' + d.job_id + '</span>'
       + '</div>'
       + '<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">' + rows + '</div>'
-      + countNote
-      + errorMsg;
+      + countNote;
+
+    // Build error node via textContent — never via string-concatenated innerHTML
+    // so a server error message cannot inject markup.
+    if (c.error) {
+      var errP = document.createElement('p');
+      errP.className = 'mt-3 text-sm text-red-600';
+      errP.appendChild(document.createTextNode('Error: '));
+      errP.appendChild(document.createTextNode(c.error));
+      sd.appendChild(errP);
+    }
   }
 
   poll();

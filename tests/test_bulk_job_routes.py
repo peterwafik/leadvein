@@ -103,6 +103,41 @@ def test_bulk_import_requires_admin():
     assert "/login" in r.headers.get("location", "/login")
 
 
+# ── Stale running-job self-heal ───────────────────────────────────────────
+
+def test_stale_running_job_self_heals():
+    """A running-status row with no live thread is reconciled to failed on status poll."""
+    import app.web.bulk_jobs as bj
+    c, _token = _admin_client()
+    # Directly insert a stale "running" row — no thread in _state
+    with Session(lv.engine) as s:
+        job = IngestionJob(
+            adapter_key="osm_geofabrik",
+            query_json=json.dumps({"region": "monaco"}),
+            status="running",
+            counts_json=json.dumps({"phase": "importing", "matched": 5}),
+        )
+        s.add(job)
+        s.commit()
+        s.refresh(job)
+        stale_id = job.id
+    # Ensure _state has no live thread so active_job detects it as stale
+    bj._state["thread"] = None
+    bj._state["job_id"] = None
+    # Status endpoint must self-heal the row
+    r = c.get("/admin/bulk-import/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "failed", f"expected failed, got {body['status']}"
+    assert "interrupted" in body["counts"].get("error", ""), \
+        f"expected interrupted error, got {body['counts']}"
+    # The DB row must be updated too
+    with Session(lv.engine) as s:
+        updated = s.get(IngestionJob, stale_id)
+        assert updated.status == "failed"
+        assert "interrupted" in json.loads(updated.counts_json).get("error", "")
+
+
 # ── Fix A: cancel button server-rendered during live run ──────────────────
 
 def test_cancel_form_visible_while_running_hidden_when_done(monkeypatch):

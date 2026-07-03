@@ -63,6 +63,21 @@ def test_reveal_returns_detail_without_economy_side_effects():
         assert s.get(Lead, lid).times_sold == 0
 
 
+def test_reveal_skips_non_int_ids():
+    """Mixed lead_ids [validId, 'abc', [1]] → 200 with only the valid lead returned."""
+    _ensure_admin()
+    with Session(lv.engine) as s:
+        lid = _seed_lead(s, "Mixed ID Lead")
+    c = TestClient(lv.app)
+    token = _login(c, "admin@demo.local", "admin12345")
+    r = c.post("/admin/bulk/reveal", json={"lead_ids": [lid, "abc", [1]]},
+               headers={"X-CSRF-Token": token})
+    assert r.status_code == 200
+    leads = r.json()["leads"]
+    assert len(leads) == 1
+    assert leads[0]["business_name"] == "Mixed ID Lead"
+
+
 def test_export_csv_full_detail_and_attribution():
     _ensure_admin()
     with Session(lv.engine) as s:

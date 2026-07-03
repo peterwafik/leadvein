@@ -138,7 +138,11 @@ async def bulk_reveal(request: Request, session: Session = Depends(get_session))
 
     sup = build_suppression_index(session, None)   # global suppression only (owner view)
     results = []
-    for lid in lead_ids:
+    for raw_id in lead_ids:
+        try:
+            lid = int(raw_id)
+        except (TypeError, ValueError):
+            continue
         lead = session.get(Lead, lid)
         if lead is None:
             continue

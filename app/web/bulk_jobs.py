@@ -29,12 +29,36 @@ _state: dict = {"thread": None, "job_id": None, "cancel": False}
 
 
 def active_job(session) -> IngestionJob | None:
-    """Return the most-recent osm_geofabrik IngestionJob row, or None."""
-    return session.exec(
+    """Return the most-recent osm_geofabrik IngestionJob row, or None.
+
+    If the latest job has status="running" but no live thread owns it (e.g.
+    after a process restart or an unhandled BaseException that bypassed
+    _write), the row is reconciled to status="failed" in-place before being
+    returned so callers always see a terminal state.
+    """
+    job = session.exec(
         select(IngestionJob)
         .where(IngestionJob.adapter_key == "osm_geofabrik")
         .order_by(IngestionJob.id.desc())
     ).first()
+    if job is None:
+        return None
+    if job.status == "running":
+        with _lock:
+            t = _state["thread"]
+            stale = t is None or not t.is_alive() or _state["job_id"] != job.id
+        if stale:
+            try:
+                existing = json.loads(job.counts_json or "{}")
+            except (json.JSONDecodeError, TypeError):
+                existing = {}
+            existing["error"] = "interrupted - worker no longer running"
+            job.status = "failed"
+            job.counts_json = json.dumps(existing)
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+    return job
 
 
 def request_cancel(job_id: int | None = None) -> None:
@@ -133,8 +157,10 @@ def start_bulk_job(
                     )
                 final_status = "cancelled" if _state["cancel"] else "done"
                 _write(final_status, counts)
-            except Exception as exc:  # noqa: BLE001 — job boundary; surface via counts
+            except BaseException as exc:  # noqa: BLE001 — job boundary; surface via counts
                 _write("failed", {"error": str(exc)})
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
 
         th = threading.Thread(target=_work, daemon=True)
         _state["thread"] = th
