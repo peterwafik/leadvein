@@ -9,13 +9,14 @@ from app.adapters.budget import stamp_provenance
 from app.core.compliance import host_of, is_opted_out, audit
 from app.core.db import Lead, IngestionJob, _now
 from app.core.retention import expiry_for
-from app.core.dedup import dedupe_key, find_existing
+from app.core.dedup import dedupe_key, find_existing, name_city_fallback_key
 from app.core.sources import ensure_source
 from app.core.targeting.coverage import recompute_coverage
 from app.enrich.website import enrich_website
 from app.scoring.engine import score
 from app.scoring.profiles import registry as profile_registry
 from app.quality.stamp import build_validation, quality_score
+from app.quality.ordinals import apply_tier_columns
 
 
 def _lead_context(n: NormalizedLead, enrichment: dict) -> dict:
@@ -87,6 +88,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             retention_expiry=expiry_for(_now()),
             dedupe_key=key,
             validation_json=json.dumps(_val), completeness_score=quality_score(_val))
+        apply_tier_columns(lead_obj, _val)
         session.add(lead_obj)
         session.flush()  # assign lead_obj.id
         from app.core.leadcats import sync_lead_categories
@@ -134,6 +136,15 @@ def merge_or_create(
     _country = addr.get("country") or country_override or ""
 
     existing = find_existing(session, key)
+
+    # Fallback: if a richer-keyed lead (phone/domain) didn't match an existing
+    # record, try name+city — handles the case where the existing record was
+    # keyed by name+city only (no phone/domain at the time of first ingest).
+    if existing is None and not key.startswith("name:"):
+        _city = addr.get("city", "") or ""
+        existing = find_existing(
+            session, name_city_fallback_key(normalized.business_name, _city)
+        )
 
     # ------------------------------------------------------------------ MERGE
     if existing is not None:
@@ -206,6 +217,7 @@ def merge_or_create(
             })
             existing.validation_json = json.dumps(_val)
             existing.completeness_score = quality_score(_val)
+            apply_tier_columns(existing, _val)
 
         session.add(existing)
         return existing
@@ -282,6 +294,7 @@ def merge_or_create(
         validation_json=json.dumps(_val),
         completeness_score=quality_score(_val),
     )
+    apply_tier_columns(lead_obj, _val)
     session.add(lead_obj)
     session.flush()  # assign PK so stamp_provenance can reference it
 

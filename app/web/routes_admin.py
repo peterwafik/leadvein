@@ -78,6 +78,34 @@ def purge_expired_route(request: Request, session: Session = Depends(get_session
     return redirect("/admin")
 
 
+@router.post("/backfill-tiers", dependencies=[Depends(csrf_protect)])
+def backfill_tiers(request: Request, session: Session = Depends(get_session)):
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    import json as _json
+    from sqlalchemy import text
+    from app.core.db import Lead
+    from app.quality.ordinals import apply_tier_columns, FIELDS
+    # Additive SQLite migration for pre-existing dev DBs.
+    # NOTE: actual table name is lv_lead (SQLModel tablename), not 'lead'.
+    for col in [f"tier_{f}" for f in FIELDS] + ["tier_contact"]:
+        try:
+            session.exec(text(f"ALTER TABLE lv_lead ADD COLUMN {col} INTEGER DEFAULT 0"))
+        except Exception:
+            pass          # column already exists
+        session.exec(text(
+            f"CREATE INDEX IF NOT EXISTS ix_lv_lead_{col} ON lv_lead ({col})"))
+    n = 0
+    for lead in session.exec(select(Lead)).all():
+        apply_tier_columns(lead, _json.loads(lead.validation_json or "{}"))
+        session.add(lead)
+        n += 1
+    session.commit()
+    audit(session, u.id, "admin.backfill_tiers", "Lead", "all", {"count": n})
+    return redirect("/admin")
+
+
 @router.get("/ingest")
 def ingest_page(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)

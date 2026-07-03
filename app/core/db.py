@@ -85,6 +85,14 @@ class Lead(SQLModel, table=True):
     # validation stamp
     validation_json: str = "{}"
     completeness_score: int = Field(default=0, index=True)
+    # Indexed int mirrors of per-field validation tiers (single writer:
+    # the stamping helper in the validation pipeline). SQL pre-narrowing only.
+    tier_phone: int = Field(default=0, index=True)
+    tier_email: int = Field(default=0, index=True)
+    tier_address: int = Field(default=0, index=True)
+    tier_website: int = Field(default=0, index=True)
+    tier_profile: int = Field(default=0, index=True)
+    tier_contact: int = Field(default=0, index=True)
     # scoring
     score_total: int = Field(default=0, index=True)
     subscores_json: str = "{}"

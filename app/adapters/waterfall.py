@@ -26,6 +26,7 @@ from app.adapters import registry
 from app.adapters.budget import would_exceed, record_use, stamp_provenance
 from app.core.targeting.view import lead_view
 from app.quality.tiers import TIER_ORDER, achieved_tier
+from app.quality.ordinals import apply_tier_columns
 
 if TYPE_CHECKING:
     from app.core.db import Lead
@@ -161,8 +162,9 @@ def run_enrichment(
             # Apply the contribution
             setattr(lead, field, contrib.value)
 
-            # Re-validate this field (offline)
+            # Re-validate this field (offline) and restamp tier ordinals
             _revalidate_field(lead, field, contrib.value)
+            apply_tier_columns(lead, json.loads(lead.validation_json or "{}"))
 
             # Stamp provenance (budget already counted above — once per invocation)
             stamp_provenance(lead, field, meta.name, contrib.license)

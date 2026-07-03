@@ -52,6 +52,16 @@
 </form>
 {% endcall %}
 
+<!-- Tier-ordinal backfill -->
+{% call ui.card(extra='p-5 mb-5') %}
+<h3 class="text-sm font-semibold text-ink-700 mb-1">Backfill tier columns</h3>
+<p class="text-[12.5px] text-ink-500 mb-4">Re-derive indexed tier ordinals from stored validation_json for all leads. Run once after a schema migration or whenever tier columns may be stale. SQL pre-narrowing only — the Python gate remains authoritative.</p>
+<form method="post" action="/admin/backfill-tiers">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {{ ui.btn('Backfill tier columns', type='submit', kind='secondary') }}
+</form>
+{% endcall %}
+
 <!-- Retention / housekeeping -->
 {% call ui.card(extra='p-5') %}
 <h3 class="text-sm font-semibold text-ink-700 mb-1">Data retention</h3>
