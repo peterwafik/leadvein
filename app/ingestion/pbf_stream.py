@@ -1,6 +1,7 @@
-"""Streaming PBF -> NormalizedLead. Memory-bounded: elements are handled one
-at a time; way locations resolve via an osmium node-location index (file-backed
-for country extracts, in-memory for fixtures). Whole-planet is out of scope.
+"""Streaming PBF -> NormalizedLead. Memory-bounded: pyosmium dispatches elements
+one at a time, but output is buffered (yield happens after parsing completes).
+Way locations resolve via an osmium node-location index (file-backed for country
+extracts, in-memory for fixtures). Whole-planet is out of scope.
 
 pyosmium 4.0.2 API adaptations (verified against installed package):
 1. osmium.InvalidLocationError — exists as osmium._osmium.InvalidLocationError,
@@ -62,7 +63,10 @@ class _Collector(osmium.SimpleHandler):
         if not tags:
             return
         lats, lons = [], []
-        for nd in w.nodes:
+        for i, nd in enumerate(w.nodes):
+            # Skip last node if it closes the ring (same ref as first node)
+            if i == len(w.nodes) - 1 and len(w.nodes) > 1 and w.nodes[-1].ref == w.nodes[0].ref:
+                continue
             try:
                 if nd.location.valid():
                     lats.append(nd.location.lat)
@@ -87,6 +91,10 @@ def stream_business_leads(pbf_path: str, *, source_key: str,
         progress_cb: Optional callable(elements_seen: int); called every
             10_000 elements AND once more after the file is fully processed
             with the final total, ensuring a flush call for small fixtures.
+
+    Note: all matching leads are buffered internally during apply_file; the first
+    item is not yielded until parsing completes. Do not rely on lazy/backpressure
+    semantics.
     """
     handler = _Collector(source_key, progress_cb)
     if node_cache_path:
