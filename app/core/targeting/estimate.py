@@ -7,8 +7,8 @@ from sqlalchemy import or_
 from app.core.db import Lead
 from app.core.masking import mask_preview
 from app.core.retention import is_expired
-from app.core.compliance import lead_opted_out
-from app.core.marketplace import _not_suppressed
+from app.core.compliance import build_optout_index
+from app.core.marketplace import build_suppression_index
 from app.core.serve_filters import passes_serve_filters
 from app.core.targeting.composition import matching_by_composition
 
@@ -43,10 +43,15 @@ def estimate(session, buyer_account_id, composition, *, sample: int = 8, ctx=Non
     extra = [expiry_clause]
     extra.extend(list((ctx or {}).get("sql_clauses") or []))
     leads = matching_by_composition(session, composition, extra_clauses=extra)
+    # Batch-prefetch compliance state once per call (not once per candidate):
+    # these indexes produce identical opt-out/suppression decisions to the
+    # per-lead lead_opted_out()/_not_suppressed() lookups they replace.
+    optout = build_optout_index(session)
+    suppression = build_suppression_index(session, buyer_account_id)
     visible = [l for l in leads
                if not is_expired(l)
-               and not lead_opted_out(session, l)
-               and _not_suppressed(session, buyer_account_id, l)
+               and not optout.matches(l)
+               and suppression.not_suppressed(l)
                and passes_serve_filters(session, buyer_account_id, l, ctx)]
     sd = {"0-49": 0, "50-69": 0, "70-84": 0, "85-100": 0}
     fd = {"<=7": 0, "<=30": 0, "<=90": 0, "older": 0}

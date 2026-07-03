@@ -49,6 +49,44 @@ def lead_opted_out(session: Session, lead) -> bool:
                         phone=lead.phone, email=lead.public_email)
 
 
+# Kinds an OptOutRequest can carry (mirrors the checks in is_opted_out).
+_OPTOUT_KINDS = ("domain", "phone", "email")
+
+
+class OptOutIndex:
+    """In-memory snapshot of applied opt-outs, keyed by kind -> set of normalized values.
+
+    Built once (one query), then matched against many leads with zero further DB
+    round-trips. `.matches(lead)` is byte-for-byte equivalent to
+    `lead_opted_out(session, lead)`: same kinds, same normalization (`_norm`),
+    same "any matching field opts the lead out" semantics.
+    """
+
+    def __init__(self, by_kind: dict[str, set[str]]):
+        self._by_kind = by_kind
+
+    def matches(self, lead) -> bool:
+        checks = [("domain", host_of(lead.website_url)),
+                  ("phone", lead.phone), ("email", lead.public_email)]
+        for kind, value in checks:
+            if not value:
+                continue
+            if _norm(kind, value) in self._by_kind[kind]:
+                return True
+        return False
+
+
+def build_optout_index(session: Session) -> OptOutIndex:
+    """Load all applied opt-outs once into an OptOutIndex (batch prefetch)."""
+    by_kind: dict[str, set[str]] = {k: set() for k in _OPTOUT_KINDS}
+    rows = session.exec(select(OptOutRequest).where(
+        OptOutRequest.applied == True)).all()  # noqa: E712
+    for r in rows:
+        if r.kind in by_kind:
+            by_kind[r.kind].add(_norm(r.kind, r.value))
+    return OptOutIndex(by_kind)
+
+
 def is_suppressed(session: Session, buyer_account_id: int | None, *, domain: str = "",
                   phone: str = "", email: str = "", business_name: str = "") -> bool:
     lists = session.exec(select(SuppressionList).where(
