@@ -119,6 +119,7 @@ def merge_or_create(
     source_url: str = "",
     enrichment: dict | None = None,
     country_override: str = "",
+    mx_lookup=None,
 ) -> Lead:
     """Find the matching Lead and gap-fill from *normalized*, or create a new one.
 
@@ -205,7 +206,7 @@ def merge_or_create(
                 "opening_hours": "",
                 "website_url": existing.website_url or "",
                 "date_last_verified": existing.date_last_verified or _now(),
-            })
+            }, mx_lookup=mx_lookup)
             existing.validation_json = json.dumps(_val)
             existing.completeness_score = quality_score(_val)
             apply_tier_columns(existing, _val)
@@ -233,7 +234,7 @@ def merge_or_create(
         "opening_hours": normalized.opening_hours or "",
         "website_url": normalized.website_url,
         "date_last_verified": _now(),
-    })
+    }, mx_lookup=mx_lookup)
 
     # Optional scoring — callers that supply a profile get subscores; others get 0.
     score_total, subscores_val, explanation = 0, {}, ""
@@ -316,6 +317,7 @@ def ingest_normalized(
     attribution: str = "",
     scoring_profile_key: str = "",
     enrich_fn=enrich_website,
+    mx_lookup=None,
 ) -> dict:
     """Ingest pre-normalised leads via ``merge_or_create``.
 
@@ -354,6 +356,7 @@ def ingest_normalized(
             source_name=source_name,
             source_url=source_url,
             enrichment=enrichment,
+            mx_lookup=mx_lookup,
         )
         counts["stored"] += 1
 
