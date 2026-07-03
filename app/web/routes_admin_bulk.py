@@ -3,7 +3,9 @@
 INVARIANT: this module imports NOTHING from app.core.purchasing.
 No PurchasedLead rows, no CreditTransaction rows, no times_sold changes.
 Compliance spine (expiry, opt-out, serve filters) still applied.
-Buyer-scoped suppression does NOT apply (owner view).
+Suppression: the owner path applies GLOBAL suppression (build_suppression_index
+with buyer_account_id=None) — matching what the admin's on-screen estimate
+applies — but never buyer-scoped suppression (there is no buyer in an owner view).
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ from sqlmodel import Session
 from app.core.compliance import audit, build_optout_index, lead_opted_out
 from app.core.db import Lead
 from app.core.export_leads import EXPORT_COLUMNS
+from app.core.marketplace import build_suppression_index
 from app.core.masking import unlock_view
 from app.core.retention import is_expired
 from app.core.serve_filters import passes_serve_filters
@@ -30,6 +33,11 @@ from app.web.csrf import csrf_protect, csrf_protect_json
 from app.web.deps import get_session, current_user
 
 router = APIRouter(prefix="/admin/bulk")
+
+# Hard cap on a single export — both id-list and composition modes.  Guards against
+# a whole-inventory dump; narrow the targeting to fit.  (Module-level so tests can
+# monkeypatch it to a small value instead of seeding tens of thousands of rows.)
+MAX_EXPORT_ROWS = 10_000
 
 # Export columns: standard set + geo + tier labels + provenance
 BULK_EXPORT_COLUMNS = EXPORT_COLUMNS + [
@@ -48,11 +56,17 @@ def _admin(request: Request, session: Session):
     return u if (u and u.role == "admin") else None
 
 
-def _is_serveable(session: Session, lead) -> bool:
-    """Compliance-spine check for owner (admin) view: no buyer suppression."""
+def _is_serveable(session: Session, lead, sup=None) -> bool:
+    """Compliance-spine check for owner (admin) view.
+
+    Applies GLOBAL suppression (when a SuppressionIndex is passed) but never
+    buyer-scoped suppression — there is no buyer in an owner view.
+    """
     if is_expired(lead):
         return False
     if lead_opted_out(session, lead):
+        return False
+    if sup is not None and sup.is_suppressed(lead):
         return False
     if not passes_serve_filters(session, None, lead, None):
         return False
@@ -100,12 +114,13 @@ async def bulk_reveal(request: Request, session: Session = Depends(get_session))
     if not isinstance(lead_ids, list) or len(lead_ids) > 500:
         return Response(status_code=400)
 
+    sup = build_suppression_index(session, None)   # global suppression only (owner view)
     results = []
     for lid in lead_ids:
         lead = session.get(Lead, lid)
         if lead is None:
             continue
-        if not _is_serveable(session, lead):
+        if not _is_serveable(session, lead, sup):
             continue
         results.append(with_quality(unlock_view(lead), lead))
 
@@ -127,6 +142,7 @@ async def bulk_export(request: Request, session: Session = Depends(get_session))
 
     serveable_leads: list = []
     comp_hash: str | None = None
+    sup = build_suppression_index(session, None)   # global suppression only (owner view)
 
     if lead_ids_raw:
         # Id-list mode — per-lead compliance check (typically ≤500)
@@ -138,7 +154,7 @@ async def bulk_export(request: Request, session: Session = Depends(get_session))
             lead = session.get(Lead, lid)
             if lead is None:
                 continue
-            if not _is_serveable(session, lead):
+            if not _is_serveable(session, lead, sup):
                 continue
             serveable_leads.append(lead)
 
@@ -158,12 +174,23 @@ async def bulk_export(request: Request, session: Session = Depends(get_session))
                 continue
             if optout.matches(lead):
                 continue
+            if sup.is_suppressed(lead):   # global suppression (matches on-screen estimate)
+                continue
             if not passes_serve_filters(session, None, lead, None):
                 continue
             serveable_leads.append(lead)
 
     else:
         return Response(status_code=400)
+
+    # Hard cap — refuse a whole-inventory dump; caller must narrow the targeting.
+    if len(serveable_leads) > MAX_EXPORT_ROWS:
+        return Response(
+            content=(f"Export capped at {MAX_EXPORT_ROWS:,} rows — "
+                     "narrow the targeting first."),
+            status_code=400,
+            media_type="text/plain",
+        )
 
     rows = [_make_export_row(lead) for lead in serveable_leads]
 
@@ -197,7 +224,9 @@ async def bulk_export(request: Request, session: Session = Depends(get_session))
         # CSV: attribution as the very first row (before the column header)
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([attribution_str])       # leading metadata row
+        # Attribution is data-derived — run it through the same formula-injection
+        # guard as the data cells below (Excel/Sheets treat a leading =,+,-,@ as a formula).
+        writer.writerow([_stringify(attribution_str)])   # leading metadata row
         writer.writerow(BULK_EXPORT_COLUMNS)     # column header
         for row in rows:
             # _stringify applies the same formula-injection guard as rows_to_csv

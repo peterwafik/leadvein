@@ -113,3 +113,78 @@ def test_admin_can_view_find_page_with_controls():
     r = c.get("/app/find")
     assert r.status_code == 200
     assert "Unlock selected" in r.text and "Export all" in r.text
+
+
+def _scripts(html: str) -> str:
+    """The <script> portions only — proves the JS is WIRED, not just markup present."""
+    return "\n".join(re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.S))
+
+
+def test_admin_find_script_wires_bulk_js():
+    """The find page JS must actually reference the bulk endpoints (dead-markup guard)."""
+    _ensure_admin()
+    c = TestClient(lv.app)
+    _login(c, "admin@demo.local", "admin12345")
+    script = _scripts(c.get("/app/find").text)
+    assert "adminExportComposition" in script      # export-all composition binding wired
+    assert "/admin/bulk/reveal" in script          # unlock/reveal fetch wired
+
+
+def test_buyer_find_has_no_bulk_js():
+    """Buyer HTML must contain neither the reveal URL nor the composition binding."""
+    c = TestClient(lv.app)
+    _login(c, "buyer@demo.local", "buyer12345")
+    html = c.get("/app/find").text
+    assert "adminExportComposition" not in html
+    assert "/admin/bulk/reveal" not in html
+
+
+def test_export_capped_at_max_rows(monkeypatch):
+    """Both export modes refuse a dump past MAX_EXPORT_ROWS (monkeypatched low)."""
+    _ensure_admin()
+    ids = []
+    with Session(lv.engine) as s:
+        for i in range(3):
+            ids.append(_seed_lead(s, f"Cap Row {i}"))
+    monkeypatch.setattr("app.web.routes_admin_bulk.MAX_EXPORT_ROWS", 2)
+    c = TestClient(lv.app)
+    token = _login(c, "admin@demo.local", "admin12345")
+    r = c.post("/admin/bulk/export",
+               data={"csrf_token": token, "format": "csv",
+                     "lead_ids": ",".join(str(i) for i in ids)})
+    assert r.status_code == 400
+    assert "capped" in r.text.lower()
+
+
+def test_global_suppression_hides_lead_from_reveal_and_export():
+    """Owner path applies GLOBAL suppression (matches the on-screen estimate)."""
+    from app.core.db import SuppressionEntry, SuppressionList
+    _ensure_admin()
+    # Unique phone so we don't suppress the shared-phone leads other tests seed.
+    uniq_phone = "+441111000999"
+    val = {"profile": {"tier": "present"}, "phone": {"tier": "validated"},
+           "email": {"tier": "absent"}, "address": {"tier": "absent"},
+           "website": {"tier": "absent"}}
+    with Session(lv.engine) as s:
+        lead = Lead(business_name="Globally Suppressed Co", city="Nowhere", country="GB",
+                    phone=uniq_phone, score_total=70, category_keys_json='["bakery"]',
+                    validation_json=json.dumps(val),
+                    attribution="© OpenStreetMap contributors (ODbL)",
+                    retention_expiry="2999-01-01T00:00:00+00:00")
+        apply_tier_columns(lead, val)
+        s.add(lead); s.commit(); s.refresh(lead)
+        lid = lead.id
+        sl = SuppressionList(buyer_account_id=None, name="global test list")  # None => global
+        s.add(sl); s.commit(); s.refresh(sl)
+        s.add(SuppressionEntry(list_id=sl.id, kind="phone", value=uniq_phone))
+        s.commit()
+    c = TestClient(lv.app)
+    token = _login(c, "admin@demo.local", "admin12345")
+    r = c.post("/admin/bulk/reveal", json={"lead_ids": [lid]},
+               headers={"X-CSRF-Token": token})
+    assert r.status_code == 200
+    assert r.json()["leads"] == []                 # globally suppressed → absent from reveal
+    r2 = c.post("/admin/bulk/export",
+                data={"csrf_token": token, "format": "csv", "lead_ids": str(lid)})
+    assert r2.status_code == 200
+    assert "Globally Suppressed Co" not in r2.content.decode("utf-8", "replace")
