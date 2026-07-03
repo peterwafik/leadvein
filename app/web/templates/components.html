@@ -52,7 +52,7 @@
 {% macro empty_state(title, body, icon=None) %}
 <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-6 py-14 text-center">
   <div class="mb-3 grid h-12 w-12 place-items-center rounded-full bg-white text-ink-400 shadow-card">
-    {{ icon|safe if icon else '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>' }}
+    {% if icon %}{{ icon|safe }}{% else %}<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>{% endif %}
   </div>
   <p class="text-sm font-semibold text-ink-700">{{ title }}</p>
   <p class="mt-1 max-w-sm text-[13px] text-ink-500">{{ body|safe }}</p>

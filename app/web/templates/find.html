@@ -581,7 +581,7 @@
     const mkRow = (a, kind) => {
       const zero = !(a.lead_count > 0);
       const row = document.createElement('div');
-      row.className = 'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5';
+      row.className = 'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-brand-50';
       const box = document.createElement('input');
       box.type = 'checkbox'; box.className = 'h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40';
       box.checked = areaSelected(a.name, kind);
@@ -596,7 +596,8 @@
         req.type = 'button';
         req.className = 'shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-ink-500 ring-1 ring-slate-200 transition hover:bg-slate-100';
         req.textContent = 'Request this area';
-        req.addEventListener('click', async () => {
+        req.addEventListener('click', async (e) => {
+          e.stopPropagation();
           req.disabled = true;
           try {
             const res = await fetch('/app/geo/ingest-request', {
@@ -610,6 +611,12 @@
         });
         row.appendChild(req);
       }
+      // Make the whole row clickable (not just the checkbox)
+      row.addEventListener('click', (e) => {
+        if (e.target === box) return; // native checkbox click already fires change
+        box.checked = !box.checked;
+        box.dispatchEvent(new Event('change'));
+      });
       return row;
     };
     groups.forEach(g => {
@@ -683,6 +690,13 @@
   renderCountries = function (countries) { _lastCountries = countries; _renderCountriesOrig(countries); };
 
   /* ── Step 3: who (categories + tech) ───────────────────────────────────── */
+  // Build recipe key → display label map from server-rendered rows (proper capitalisation like "GloriaFood")
+  const _recipeLabels = {};
+  $$('[data-recipe-row]').forEach(r => {
+    const lbl = r.querySelector('.who-label');
+    if (lbl) _recipeLabels[r.dataset.recipeRow] = lbl.textContent.trim();
+  });
+
   function toggleWho(kind, val) {
     const arr = kind === 'cat' ? state.answers.categories : state.answers.tech_recipes;
     const i = arr.indexOf(val);
@@ -705,8 +719,13 @@
       items.forEach(it => {
         const chip = document.createElement('span');
         chip.setAttribute('data-chip', '');
+        // Recipe chips use the server-rendered label (proper caps e.g. "GloriaFood");
+        // category chips keep capitalize CSS (keys are plain lowercase words like "restaurant").
+        const chipLabel = it.kind === 'recipe'
+          ? (_recipeLabels[it.v] || it.v.replace(/_/g, ' '))
+          : it.v.replace(/_/g, ' ');
         chip.className = 'inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[12px] font-medium capitalize text-brand-700 ring-1 ring-brand-100';
-        chip.appendChild(document.createTextNode(it.v.replace(/_/g, ' ') + ' '));
+        chip.appendChild(document.createTextNode(chipLabel + ' '));
         const x = document.createElement('button');
         x.type = 'button'; x.className = 'text-brand-500 hover:text-brand-800 leading-none'; x.textContent = '×';
         x.addEventListener('click', () => toggleWho(it.kind, it.v));

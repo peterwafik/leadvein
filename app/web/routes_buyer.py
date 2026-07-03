@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from app.core.compliance import audit
 from app.core.db import (BuyerAccount, Lead, LeadRecipe, PurchasedLead,
-                         SuppressionList, SuppressionEntry, CreditTransaction, _now)
+                         Segment, SuppressionList, SuppressionEntry, CreditTransaction, _now)
 from app.core.export_leads import export_purchased_csv
 from app.core.masking import unlock_view, assert_owned
 from app.quality.visibility import with_quality
@@ -38,8 +38,8 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     ba = session.get(BuyerAccount, u.buyer_account_id)
     n_purchased = len(session.exec(select(PurchasedLead).where(
         PurchasedLead.buyer_account_id == ba.id)).all())
-    n_recipes = len(session.exec(select(LeadRecipe).where(
-        LeadRecipe.buyer_account_id == ba.id)).all())
+    n_recipes = len(session.exec(select(Segment).where(
+        Segment.buyer_account_id == ba.id)).all())
     return templates.TemplateResponse(request, "dashboard.html", {
         "request": request, "user": u, "credits": ba.credits,
         "n_purchased": n_purchased, "n_recipes": n_recipes,
