@@ -101,3 +101,67 @@ def test_bulk_import_requires_admin():
                follow_redirects=False)
     assert r.status_code in (302, 303)
     assert "/login" in r.headers.get("location", "/login")
+
+
+# ── Fix A: cancel button server-rendered during live run ──────────────────
+
+def test_cancel_form_visible_while_running_hidden_when_done(monkeypatch):
+    """GET /admin/ingest while running: cancel form is server-rendered (not hidden).
+    After the job finishes: cancel div carries class='hidden'."""
+    import app.web.bulk_jobs as bj
+    started = {"go": False}
+
+    def slow_run(session, region_key, **kw):
+        while not started["go"]:
+            time.sleep(0.02)
+            if kw.get("cancel_check") and kw["cancel_check"]():
+                return {"matched": 0}
+        return {"matched": 0}
+
+    monkeypatch.setattr(bj, "run_bulk_import", slow_run)
+    c, token = _admin_client()
+    c.post("/admin/bulk-import", data={"csrf_token": token, "region": "monaco",
+                                       "scoring_profile_key": ""},
+           follow_redirects=False)
+
+    # While running: the server must render the cancel form without hidden class
+    html = c.get("/admin/ingest").text
+    assert 'action="/admin/bulk-import/cancel"' in html, \
+        "cancel form must be present while running"
+    # The cancel-wrap div must NOT be hidden while running
+    assert 'id="bulk-cancel-wrap" class="hidden"' not in html, \
+        "cancel-wrap must not be hidden while job is running"
+
+    # Allow the job to finish, then verify cancel button is hidden
+    started["go"] = True
+    for _ in range(50):
+        body = c.get("/admin/bulk-import/status").json()
+        if body["status"] in ("done", "failed", "cancelled"):
+            break
+        time.sleep(0.1)
+
+    html2 = c.get("/admin/ingest").text
+    assert 'id="bulk-cancel-wrap" class="hidden"' in html2, \
+        "cancel-wrap must be hidden after job completes"
+
+
+# ── Fix B: phase field written to counts_json ─────────────────────────────
+
+def test_bulk_job_lifecycle_includes_phase(monkeypatch):
+    """counts_json must carry a 'phase' key throughout the job lifecycle."""
+    import app.web.bulk_jobs as bj
+    monkeypatch.setattr(bj, "run_bulk_import", _fake_run)
+    c, token = _admin_client()
+    c.post("/admin/bulk-import", data={"csrf_token": token, "region": "monaco",
+                                       "scoring_profile_key": ""},
+           follow_redirects=False)
+    # Wait for completion
+    for _ in range(50):
+        body = c.get("/admin/bulk-import/status").json()
+        if body["status"] in ("done", "failed"):
+            break
+        time.sleep(0.1)
+    assert body["status"] == "done"
+    # Phase must be present in the final counts (preserved through _write)
+    assert "phase" in body.get("counts", {}), \
+        "counts_json must include 'phase' key after job completes"

@@ -45,11 +45,28 @@
 
 <div id="bulk-status"></div>
 
+{# Fix A: Cancel button is always server-rendered; hidden when no job is running.
+   JS poll toggles visibility so the button appears/disappears without a page reload. #}
+<div id="bulk-cancel-wrap"{% if not running_job %} class="hidden"{% endif %}>
+  <form method="post" action="/admin/bulk-import/cancel" class="mt-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button type="submit" class="inline-flex items-center text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-4 py-2 bg-white hover:bg-red-50 transition">Cancel import</button>
+  </form>
+</div>
+
 <script>
 (function () {
   var csrf = {{ csrf | tojson }};
   var sd = document.getElementById('bulk-status');
+  var cancelWrap = document.getElementById('bulk-cancel-wrap');
   var timer = null;
+
+  // Fix B: phase → human-readable copy shown while counts are still blank
+  var phaseLabels = {
+    'downloading': 'Downloading extract…',
+    'parsing':     'Parsing extract…',
+    'importing':   'Importing batches…'
+  };
 
   function poll() {
     fetch('/admin/bulk-import/status')
@@ -66,14 +83,21 @@
   }
 
   function render(d) {
+    // Fix A: toggle cancel button visibility based on polled status
+    if (cancelWrap) cancelWrap.classList.toggle('hidden', d.status !== 'running');
+
     if (d.status === 'idle') {
       sd.innerHTML = '<p class="text-sm text-ink-400 mt-1">No bulk import has run yet.</p>';
       return;
     }
     var c = d.counts || {};
     var isRunning = d.status === 'running';
+
+    // Fix B: show phase label alongside status badge
+    var phaseLabel = (isRunning && c.phase) ? phaseLabels[c.phase] || c.phase : '';
     var badges = {
-      running:   '<span class="font-semibold text-amber-700">Running…</span>',
+      running:   '<span class="font-semibold text-amber-700">Running'
+                 + (phaseLabel ? ' — ' + phaseLabel : '…') + '</span>',
       done:      '<span class="font-semibold text-emerald-700">Done</span>',
       cancelled: '<span class="font-semibold text-slate-500">Cancelled</span>',
       failed:    '<span class="font-semibold text-red-600">Failed</span>'
@@ -90,19 +114,18 @@
       ['Hot so far (touched this run)', c.hot                     || 0]
     ];
 
+    // Fix B: honest copy when counts are still blank (download/parse phase)
+    var hasRealCounts = !!(c.matched || c.elements_seen);
+    var countNote = (isRunning && !hasRealCounts && c.phase && c.phase !== 'importing')
+      ? '<p class="mt-2 text-[12px] text-ink-400">Counts appear after the first batch is imported.</p>'
+      : '';
+
     var rows = funnel.map(function (pair) {
       return '<div>'
         + '<p class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">' + pair[0] + '</p>'
         + '<p class="text-2xl font-bold text-ink-900 mt-0.5">' + Number(pair[1]).toLocaleString() + '</p>'
         + '</div>';
     }).join('');
-
-    var cancelBtn = isRunning
-      ? '<form method="post" action="/admin/bulk-import/cancel" class="mt-4">'
-        + '<input type="hidden" name="csrf_token" value="' + csrf + '">'
-        + '<button type="submit" class="inline-flex items-center text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-4 py-2 bg-white hover:bg-red-50 transition">Cancel import</button>'
-        + '</form>'
-      : '';
 
     var errorMsg = (c.error)
       ? '<p class="mt-3 text-sm text-red-600">Error: ' + c.error + '</p>'
@@ -114,7 +137,7 @@
       + '<span class="text-ink-400 ml-2">— job #' + d.job_id + '</span>'
       + '</div>'
       + '<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">' + rows + '</div>'
-      + cancelBtn
+      + countNote
       + errorMsg;
   }
 

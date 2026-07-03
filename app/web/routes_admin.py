@@ -121,14 +121,20 @@ def ingest_page(request: Request, session: Session = Depends(get_session)):
     if not u:
         return redirect("/login")
     from app.core.db import IngestRequest
+    from app.web import bulk_jobs
     open_requests = session.exec(select(IngestRequest).where(
         IngestRequest.status == "open").order_by(IngestRequest.created_at)).all()
+    # Detect an actively-running bulk job so the template can server-render the
+    # cancel affordance immediately (Fix A: cancel visible during live run).
+    active = bulk_jobs.active_job(session)
+    running_job = active is not None and active.status == "running"
     # FIX 1a: only show adapters compatible with the generic ingest() runner
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": _generic_ingest_keys(),
         "regions": REGIONS,
         "result": None, "csrf": ensure_csrf(request),
-        "open_requests": open_requests})
+        "open_requests": open_requests,
+        "running_job": running_job})
 
 
 @router.post("/ingest-request/{req_id}/close", dependencies=[Depends(csrf_protect)])

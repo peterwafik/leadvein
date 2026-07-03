@@ -55,6 +55,7 @@ def run_bulk_import(
     batch_size: int = 500,
     cancel_check=None,
     on_progress=None,
+    on_phase=None,
     actor_user_id=None,
 ) -> dict:
     """Import business leads from a Geofabrik PBF extract into the DB.
@@ -68,6 +69,11 @@ def run_bulk_import(
         cancel_check: Callable() -> bool; truthy between batches stops the run
             cleanly. Committed batches stay; any pending batch is abandoned.
         on_progress: Callable(counts_dict) called after each committed batch.
+        on_phase: Optional Callable(phase: str) invoked when the import enters
+            a new phase: "parsing" (PBF is downloaded, starting element scan)
+            and "importing" (first batch flush beginning). Used by the background
+            job to update the status block without waiting for the first
+            on_progress call.
         actor_user_id: User ID for the audit log entry (None = system).
 
     Returns:
@@ -88,15 +94,29 @@ def run_bulk_import(
     }
 
     path = pbf_path or download_extract(region_key)
+
+    # Signal "parsing" phase now that download is complete.
+    if on_phase:
+        on_phase("parsing")
+
     mx = _cached_mx()
     seen_keys: set[str] = set()
     batch: list = []
+    _first_flush = True
 
     def _progress(n_elements: int) -> None:
         counts["elements_seen"] = n_elements
 
     def _flush() -> None:
+        nonlocal _first_flush
         from app.core.leadcats import sync_lead_categories
+
+        # Signal "importing" on the very first flush so the UI updates before
+        # any on_progress callback fires (first flush has no prior progress call).
+        if _first_flush:
+            _first_flush = False
+            if on_phase:
+                on_phase("importing")
 
         for n in batch:
             domain = host_of(n.website_url)

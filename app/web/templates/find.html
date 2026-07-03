@@ -546,6 +546,17 @@
     } catch (e) { showError(); }
   }
 
+  // Fix C: event delegation for country-list — one stable listener avoids
+  // stale-node clicks when the list is rebuilt on every search keystroke.
+  const _countryListEl = $('[data-country-list]');
+  if (_countryListEl) {
+    _countryListEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-country-code]');
+      if (!btn) return;
+      selectCountry(btn.dataset.countryCode, btn.dataset.countryName);
+    });
+  }
+
   function renderCountries(countries) {
     const list = $('[data-country-list]');
     if (!list) return;
@@ -554,13 +565,15 @@
     countries.filter(c => !q || c.name.toLowerCase().indexOf(q) !== -1).forEach(c => {
       const btn = document.createElement('button');
       btn.type = 'button';
+      // Fix C: data-country-code/name used by delegation listener; no per-node click
+      btn.dataset.countryCode = c.code;
+      btn.dataset.countryName = c.name;
       btn.className = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-ink-700 transition hover:bg-brand-50' +
         (c.code === state.geoCountry ? ' bg-brand-50 font-semibold text-brand-700' : '');
       const nameEl = document.createElement('span');
       nameEl.className = 'flex-1'; nameEl.textContent = c.name;
       btn.appendChild(nameEl);
       btn.appendChild(covBadge(c.lead_count || 0));
-      btn.addEventListener('click', () => selectCountry(c.code, c.name));
       list.appendChild(btn);
     });
     if (!list.children.length) list.innerHTML = '<p class="px-2 py-4 text-[13px] text-ink-400">No countries match.</p>';
@@ -607,6 +620,23 @@
     renderGeoChips(); loadAreas(($('[data-area-search]').value || '')); compileAndEstimate();
   }
 
+  // Fix C: event delegation for area-list — one stable listener on the container.
+  // Per-node click listeners were removed from mkRow; delegation resolves the row
+  // via data-area-name/data-area-kind. "Request this area" keeps stopPropagation
+  // so it never triggers the delegation handler.
+  const _areaListEl = $('[data-area-list]');
+  if (_areaListEl) {
+    _areaListEl.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-area-name]');
+      if (!row) return;
+      const cb = row.querySelector('input[type="checkbox"]');
+      if (!cb) return;
+      if (e.target === cb) return; // native checkbox click already fires change
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  }
+
   function renderAreas(data) {
     const list = $('[data-area-list]');
     if (!list) return;
@@ -620,6 +650,9 @@
     const mkRow = (a, kind) => {
       const zero = !(a.lead_count > 0);
       const row = document.createElement('div');
+      // Fix C: data attributes for delegation; no per-node row click listener
+      row.dataset.areaName = a.name;
+      row.dataset.areaKind = kind;
       row.className = 'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-brand-50';
       const box = document.createElement('input');
       box.type = 'checkbox'; box.className = 'h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40';
@@ -636,7 +669,7 @@
         req.className = 'shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-ink-500 ring-1 ring-slate-200 transition hover:bg-slate-100';
         req.textContent = 'Request this area';
         req.addEventListener('click', async (e) => {
-          e.stopPropagation();
+          e.stopPropagation(); // Fix C: prevents area-list delegation from also firing
           req.disabled = true;
           try {
             const res = await fetch('/app/geo/ingest-request', {
@@ -650,12 +683,7 @@
         });
         row.appendChild(req);
       }
-      // Make the whole row clickable (not just the checkbox)
-      row.addEventListener('click', (e) => {
-        if (e.target === box) return; // native checkbox click already fires change
-        box.checked = !box.checked;
-        box.dispatchEvent(new Event('change'));
-      });
+      // Fix C: row click is now handled by the delegation listener above — no per-node handler.
       return row;
     };
     groups.forEach(g => {
@@ -979,22 +1007,29 @@
   /* ── Compile + estimate (debounced) ────────────────────────────────────── */
   let compileTimer = null;
   let _estimateSeq = 0;
+  // Fix D: track in-flight compile so Run can await it before firing the estimate.
+  // Starts as a resolved promise so the first Run click never blocks.
+  let _compileInFlight = Promise.resolve(null);
   function compileAndEstimate() { clearTimeout(compileTimer); compileTimer = setTimeout(_run, 350); }
 
   async function _run() {
     const seq = ++_estimateSeq;
     const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
     // 1) compile from answers (always — provides the sentence + quality keys)
+    // Fix D: expose a promise that resolves when the compile phase settles.
+    let _resolveCompile;
+    _compileInFlight = new Promise(resolve => { _resolveCompile = resolve; });
     try {
       const cRes = await fetch('/app/find/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
         body: JSON.stringify({ campaign_key: state.campaignKey, answers: state.answers })
       });
-      if (seq !== _estimateSeq) return;
+      if (seq !== _estimateSeq) { _resolveCompile(null); return; }
       if (cRes.ok) { state.compiled = await cRes.json(); }
       else if (cRes.status !== 401) { showError(); }
-    } catch (e) { if (seq !== _estimateSeq) return; showError(); }
+    } catch (e) { if (seq !== _estimateSeq) { _resolveCompile(null); return; } showError(); }
+    _resolveCompile(state.compiled); // compile settled — unblock any waiting Run handler
 
     if (seq !== _estimateSeq) return;
     renderSentence(usingAdvanced);
@@ -1091,6 +1126,9 @@
 
   function sampleCard(s, withUnlock) {
     const score = s.score_total || 0;
+    // Fix E: bulk-imported leads without a scoring profile have score_total=0 and
+    // no explanation — render "—" with a tooltip instead of the misleading "0" badge.
+    const unscored = score === 0 && !s.reason;
     const scoreClass = score >= 70 ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-ink-600';
     const cat = (s.category_keys && s.category_keys[0]) ? s.category_keys[0].replace(/_/g, ' ') : 'business';
     const loc = s.city || s.region || s.country || '—';
@@ -1098,7 +1136,9 @@
     const card = document.createElement('div');
     card.className = 'group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card transition hover:border-slate-300 hover:shadow-pop';
     const head = document.createElement('div'); head.className = 'flex items-start justify-between gap-2';
-    const sc = document.createElement('span'); sc.className = 'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[13px] font-bold ' + scoreClass; sc.textContent = score;
+    const sc = document.createElement('span'); sc.className = 'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[13px] font-bold ' + scoreClass;
+    sc.textContent = unscored ? '—' : score;
+    if (unscored) sc.title = 'Not scored';
     const src = document.createElement('span'); src.className = 'text-[11px] font-medium text-ink-400 text-right leading-tight'; src.textContent = source;
     head.appendChild(sc); head.appendChild(src); card.appendChild(head);
     const mid = document.createElement('div'); mid.className = 'mt-3';
@@ -1157,6 +1197,10 @@
   /* ── Run: full results grid (sample 60) ────────────────────────────────── */
   const runBtn = $('[data-run-btn]');
   if (runBtn) runBtn.addEventListener('click', async () => {
+    // Fix D: if a compile is in-flight, wait for it to settle before reading
+    // state.compiled — otherwise the grid fires with a stale composition and
+    // the seq guard discards the response, leaving the grid silently empty.
+    await _compileInFlight;
     const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
     const composition = usingAdvanced ? state.advancedComposition
                        : (state.compiled ? state.compiled.composition : { op: 'AND', nodes: [] });

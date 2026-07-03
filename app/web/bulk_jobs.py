@@ -9,6 +9,10 @@ module level.  Inside _work(), referencing `run_bulk_import` as a bare name
 resolves it through the module globals dict at CALL TIME (Python global lookup
 is always dynamic), so the patch is visible to the thread without any extra
 indirection.
+
+Phase tracking: counts_json always includes a "phase" key so the UI can show
+"Running — downloading extract…" / "parsing…" / "importing…" instead of a
+blank counts block during the long download+parse phase (~90s for Monaco).
 """
 from __future__ import annotations
 
@@ -68,7 +72,10 @@ def start_bulk_job(
                 adapter_key="osm_geofabrik",
                 query_json=json.dumps({"region": region_key}),
                 status="running",
-                counts_json="{}",
+                # Phase "downloading" is visible immediately — counts will be blank
+                # for the whole download+parse phase (~90s for Monaco) so the UI
+                # shows honest copy instead of an empty funnel.
+                counts_json=json.dumps({"phase": "downloading"}),
             )
             s.add(job)
             s.commit()
@@ -83,12 +90,33 @@ def start_bulk_job(
             # call time, so monkeypatch(bj, "run_bulk_import", fake) takes effect.
             fn = run_fn or run_bulk_import  # noqa: F821 — intentional global lookup
 
+            # Track the current phase so every _write call includes it, preventing
+            # on_progress flushes from silently dropping the phase field.
+            _cur_phase = ["downloading"]
+
             def _write(status: str, counts: dict) -> None:
                 with Session(engine) as ws:
                     row = ws.get(IngestionJob, job_id)
                     if row is not None:
                         row.status = status
-                        row.counts_json = json.dumps(counts)
+                        merged = dict(counts)
+                        merged["phase"] = _cur_phase[0]
+                        row.counts_json = json.dumps(merged)
+                        ws.add(row)
+                        ws.commit()
+
+            def _on_phase(phase: str) -> None:
+                """Update the phase field in counts_json, preserving existing counts."""
+                _cur_phase[0] = phase
+                with Session(engine) as ws:
+                    row = ws.get(IngestionJob, job_id)
+                    if row is not None:
+                        try:
+                            existing = json.loads(row.counts_json or "{}")
+                        except (json.JSONDecodeError, TypeError):
+                            existing = {}
+                        existing["phase"] = phase
+                        row.counts_json = json.dumps(existing)
                         ws.add(row)
                         ws.commit()
 
@@ -100,6 +128,7 @@ def start_bulk_job(
                         scoring_profile_key=scoring_profile_key,
                         cancel_check=lambda: _state["cancel"],
                         on_progress=lambda c: _write("running", c),
+                        on_phase=_on_phase,
                         actor_user_id=actor_user_id,
                     )
                 final_status = "cancelled" if _state["cancel"] else "done"
