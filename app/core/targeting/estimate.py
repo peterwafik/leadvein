@@ -40,7 +40,9 @@ def estimate(session, buyer_account_id, composition, *, sample: int = 8, ctx=Non
         Lead.retention_expiry == "",
         Lead.retention_expiry >= now_iso,  # >= : SQL must stay a SUPERSET of Python's is_expired (which uses <)
     )
-    leads = matching_by_composition(session, composition, extra_clauses=[expiry_clause])
+    extra = [expiry_clause]
+    extra.extend(list((ctx or {}).get("sql_clauses") or []))
+    leads = matching_by_composition(session, composition, extra_clauses=extra)
     visible = [l for l in leads
                if not is_expired(l)
                and not lead_opted_out(session, l)
