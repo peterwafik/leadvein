@@ -3,6 +3,18 @@
      Conditions are combined with AND; every registered predicate gets a row so a
      loaded composition (campaign/saved audience) is never silently dropped. ── #}
 {% import "components.html" as ui %}
+{# Human-readable labels for predicate param names.
+   Fallback: replace('_',' ')|title.
+   DO NOT change data-param attrs or any JS — display text only. #}
+{% set _param_labels = {
+  'min_strength': 'Match strength',
+  'recipe_in':   'Platforms',
+  'days':        'Days',
+  'value':       'Value',
+  'in':          'Any of',
+  'min':         'Minimum',
+  'signal':      'Signal'
+} %}
 <div class="rounded-xl border border-slate-200 bg-white shadow-card" data-advanced-panel>
   <div class="border-b border-slate-100 px-5 py-4">
     <p class="text-[13px] text-ink-500">Every registered condition. Conditions are combined with AND. Toggle "Exclude" to leave out matches.</p>
@@ -37,7 +49,7 @@
           <div class="adv-params ml-6 space-y-2 hidden">
             {% for param_name, param_type in opt.params_schema.items() %}
               <div class="flex items-center gap-2">
-                <label class="text-[12px] text-ink-600 w-20 shrink-0">{{ param_name }}</label>
+                <label class="text-[12px] text-ink-600 w-20 shrink-0">{{ _param_labels[param_name] if param_name in _param_labels else param_name | replace('_',' ') | title }}</label>
                 {% if param_type == 'int' %}
                   <input type="number" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm w-28 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
                          data-param="{{ param_name }}" placeholder="0">
@@ -105,7 +117,7 @@
             <div class="adv-params ml-6 space-y-2 hidden">
               {% for param_name, param_type in opt.params_schema.items() %}
                 <div class="flex items-center gap-2">
-                  <label class="text-[12px] text-ink-600 w-20 shrink-0">{{ param_name }}</label>
+                  <label class="text-[12px] text-ink-600 w-20 shrink-0">{{ _param_labels[param_name] if param_name in _param_labels else param_name | replace('_',' ') | title }}</label>
                   {% if param_type == 'int' %}
                     <input type="number" class="adv-param-input rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-ink-900 shadow-sm w-28 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/25"
                            data-param="{{ param_name }}" placeholder="0">
