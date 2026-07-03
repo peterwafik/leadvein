@@ -57,6 +57,8 @@ def _seed_accounts() -> None:
         seed_recipes(s)
         from app.geo.ref import seed_geo_fixture
         seed_geo_fixture(s)
+        from app.adapters.osm_tags import seed_osm_tag_mappings
+        seed_osm_tag_mappings(s)
         creds = config.admin_credentials()
         if creds is not None:
             admin_email, admin_pw = creds
