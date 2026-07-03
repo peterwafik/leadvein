@@ -1,6 +1,6 @@
 {
   "shop":       {"mode": "wildcard", "exclude": ["vacant", "no", "yes", "mall"],
-                 "alias": {"bakery": "bakery", "hairdresser": "hair_salon", "beauty": "nail_salon",
+                 "alias": {"bakery": "bakery", "hairdresser": "barber_shop", "beauty": "nail_salon",
                             "convenience": "convenience_store", "supermarket": "supermarket",
                             "laundry": "laundromat", "dry_cleaning": "dry_cleaner",
                             "butcher": "butcher", "florist": "florist", "clothes": "clothing_store",
@@ -32,7 +32,7 @@
   "tourism":    {"mode": "allowlist", "map": {"hotel": "hotel", "guest_house": "guest_house",
                  "hostel": "hostel", "motel": "motel", "apartment": "holiday_apartment",
                  "camp_site": "camp_site"}},
-  "leisure":    {"mode": "allowlist", "map": {"fitness_centre": "gym", "sports_centre": "sports_centre",
+  "leisure":    {"mode": "allowlist", "map": {"fitness_centre": "fitness_studio", "sports_centre": "sports_centre",
                  "dance": "dance_studio", "bowling_alley": "bowling_alley",
                  "escape_game": "escape_room", "amusement_arcade": "amusement_arcade",
                  "adult_gaming_centre": "gaming_centre", "miniature_golf": "miniature_golf",

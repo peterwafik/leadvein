@@ -10,7 +10,8 @@ from app.core.db import LeadCategory
 def test_allowlist_and_alias_mapping():
     assert match_categories({"amenity": "restaurant"}) == ["restaurant"]
     assert match_categories({"amenity": "fast_food"}) == ["takeaway"]
-    assert match_categories({"shop": "hairdresser"}) == ["hair_salon"]
+    # historical inventory continuity: same tag -> same category as existing leads
+    assert match_categories({"shop": "hairdresser"}) == ["barber_shop"]
 
 
 def test_wildcard_maps_unknown_values():
