@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 
 from fastapi import APIRouter, Depends, Request
@@ -37,10 +38,9 @@ def _category_counts(session: Session) -> list[dict]:
     return sorted(({"key": k, "count": n} for k, n in rows), key=lambda x: x["key"])
 
 
-def _tech_groups(session: Session) -> dict[str, list[dict]]:
-    from app.fingerprints.library import list_recipes
+def _tech_groups(recipes) -> dict[str, list[dict]]:
     groups: dict[str, list[dict]] = {}
-    for r in list_recipes(session):
+    for r in recipes:
         groups.setdefault(r.category, []).append({
             "recipe_key": r.recipe_key, "tech_type": r.tech_type,
             "confidence": r.confidence, "enabled": r.enabled})
@@ -54,6 +54,8 @@ def find_page(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
     if not u:
         return redirect("/login")
+    from app.fingerprints.library import list_recipes
+    recipes = list_recipes(session)
     counts = geo_lead_counts(session)["countries"]
     ctx: dict = {
         "request": request, "user": u, "csrf": ensure_csrf(request),
@@ -63,7 +65,7 @@ def find_page(request: Request, session: Session = Depends(get_session)):
                        "lead_count": counts.get(c.country_code, 0)}
                       for c in list_countries(session)],
         "cat_options": _category_counts(session),
-        "tech_groups": _tech_groups(session),
+        "tech_groups": _tech_groups(recipes),
         "mode": request.query_params.get("mode", "guided"),
         "prefill": None, "preset": None,
     }
@@ -88,8 +90,7 @@ def find_page(request: Request, session: Session = Depends(get_session)):
             pass
     from app.core.targeting.composer import predicate_options
     ctx["options"] = predicate_options(session)      # advanced disclosure data
-    from app.fingerprints import library as fp_library
-    ctx["tech_recipes"] = fp_library.list_recipes(session)
+    ctx["tech_recipes"] = recipes                    # reuse the same fetch
     return templates.TemplateResponse(request, "find.html", ctx)
 
 
@@ -117,13 +118,12 @@ async def find_compile(request: Request, session: Session = Depends(get_session)
             quality_keys.append(camp.quality_profile_key)
         gated_notices = [{"path": p, "reason": "requires licensed source"}
                          for p in json.loads(camp.gated_signals or "[]")]
-        scoring_profile_key = camp.scoring_profile_key
+        scoring_profile_key = camp.scoring_profile_key or ""
     ck = channel_profile_key(answers.get("contact_channel", ""))
     if ck and ck not in quality_keys:
         quality_keys.append(ck)
 
     sentence = render_sentence(session, composition, quality_profile_keys=quality_keys)
-    import hashlib
     comp_hash = hashlib.sha256(
         json.dumps(composition, sort_keys=True).encode()).hexdigest()[:16]
     audit(session, u.id, "find.compile", "Campaign", campaign_key or "custom",

@@ -75,6 +75,28 @@
 </span>
 {% endmacro %}
 
+{% macro stepper(steps, current) %}
+<div class="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-card" data-stepper>
+  {% for s in steps %}
+  <button type="button" data-step-btn="{{ loop.index }}"
+    class="flex items-center gap-2 rounded-full px-3 py-1.5 text-[12.5px] font-medium transition
+      {{ 'bg-brand-50 text-brand-800' if loop.index == current else 'text-ink-400 hover:text-ink-600' }}">
+    <span class="grid h-5 w-5 place-items-center rounded-full text-[10.5px] font-bold
+      {{ 'bg-brand-600 text-white' if loop.index == current else 'bg-slate-100 text-ink-500' }}"
+      data-step-num>{{ loop.index }}</span>{{ s }}
+  </button>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro coverage_badge(count) %}
+  {% if count and count > 0 %}
+    <span class="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-800 tabular-nums">{{ count }} lead{{ 's' if count != 1 }}</span>
+  {% else %}
+    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-ink-400">0 — not yet ingested</span>
+  {% endif %}
+{% endmacro %}
+
 {# a masked lead card for the marketplace #}
 {% macro lead_card(c) %}
 <div class="group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card transition hover:border-slate-300 hover:shadow-pop">

@@ -31,8 +31,12 @@ def test_find_page_renders_campaigns_and_modes():
     assert "Utilities (UK)" in r.text
     assert "Describe your own" in r.text
     assert "Quick search" in r.text
-    # buyer-facing copy: no engine jargon
-    assert "min_score" not in r.text
+    # buyer-facing copy: no engine jargon in VISIBLE text (strip scripts + machine
+    # data-* attributes; the advanced disclosure carries predicate keys in data-key,
+    # same as the shipped composer, but they are never buyer-visible).
+    visible = re.sub(r'<script.*?</script>', '', r.text, flags=re.S)
+    visible = re.sub(r'data-[a-z-]+="[^"]*"', '', visible)
+    assert "min_score" not in visible
     assert "predicate" not in r.text.lower() or "data-" in r.text  # allow data attrs only
 
 
