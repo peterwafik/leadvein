@@ -22,6 +22,19 @@ REGIONS: dict[str, dict] = {
                                      "country": "IE", "label": "Ireland + Northern Ireland"},
     "monaco": {"path": "europe/monaco", "country": "MC",
                 "label": "Monaco (tiny - live test region)"},
+    # England county/metro extracts — smaller units for staged pilot imports.
+    "oxfordshire": {"path": "europe/united-kingdom/england/oxfordshire",
+                     "country": "GB", "label": "England - Oxfordshire"},
+    "cambridgeshire": {"path": "europe/united-kingdom/england/cambridgeshire",
+                        "country": "GB", "label": "England - Cambridgeshire"},
+    "norfolk": {"path": "europe/united-kingdom/england/norfolk",
+                 "country": "GB", "label": "England - Norfolk"},
+    "greater-manchester": {"path": "europe/united-kingdom/england/greater-manchester",
+                            "country": "GB", "label": "England - Greater Manchester"},
+    "west-midlands": {"path": "europe/united-kingdom/england/west-midlands",
+                       "country": "GB", "label": "England - West Midlands"},
+    "greater-london": {"path": "europe/united-kingdom/england/greater-london",
+                        "country": "GB", "label": "England - Greater London (large)"},
 }
 
 
