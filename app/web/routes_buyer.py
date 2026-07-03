@@ -336,6 +336,29 @@ async def composer_apply_campaign(request: Request, session: Session = Depends(g
     })
 
 
+def run_estimate(session, buyer_account_id, body: dict):
+    """Shared estimate: resolves 1..n quality profile keys (honest intersection)."""
+    composition = body.get("composition") or {"op": "AND", "nodes": []}
+    keys = body.get("quality_profile_keys")
+    if not keys:
+        single = body.get("quality_profile_key", "") or ""
+        keys = [single] if single else []
+    profiles = []
+    from app.quality.profiles.registry import get as get_quality_profile
+    for k in keys:
+        try:
+            profiles.append(get_quality_profile(k))
+        except KeyError:
+            pass                       # unknown key → skipped, baseline still gates
+    ctx = None
+    if profiles:
+        from app.quality.profiles.combine import combine_profiles
+        ctx = {"quality_profile": combine_profiles(profiles)}
+    from app.core.targeting.estimate import estimate as targeting_estimate
+    return targeting_estimate(session, buyer_account_id, composition,
+                              sample=int(body.get("sample", 9)), ctx=ctx)
+
+
 @router.post("/composer/estimate")
 async def composer_estimate(request: Request, session: Session = Depends(get_session)):
     u = _buyer(request, session)
@@ -345,16 +368,6 @@ async def composer_estimate(request: Request, session: Session = Depends(get_ses
         body = await request.json()
     except Exception:
         return Response(status_code=400)
-    composition = body.get("composition") or {"op": "AND", "nodes": []}
-    quality_profile_key = body.get("quality_profile_key", "") or ""
-    ctx = None
-    if quality_profile_key:
-        try:
-            from app.quality.profiles.registry import get as get_quality_profile
-            prof = get_quality_profile(quality_profile_key)
-            ctx = {"quality_profile": prof}
-        except KeyError:
-            pass  # Unknown key → baseline only, never 500
     # Audit campaign.search when estimate is driven by a campaign-derived segment
     segment_id = body.get("segment_id")
     if segment_id:
@@ -365,10 +378,8 @@ async def composer_estimate(request: Request, session: Session = Depends(get_ses
                       {"origin_key": seg.origin_key})
         except (ValueError, TypeError):
             pass
-    from app.core.targeting.estimate import estimate as targeting_estimate
     try:
-        est = targeting_estimate(session, u.buyer_account_id, composition,
-                                 sample=int(body.get("sample", 9)), ctx=ctx)
+        est = run_estimate(session, u.buyer_account_id, body)
     except (ValueError, KeyError, TypeError):
         return Response(status_code=400)
     return est

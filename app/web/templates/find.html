@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block heading %}Find leads{% endblock %}
+{% block body %}
+<div data-page="find">
+  <p>Quick search</p><p>Describe your own</p>
+  {% for c in campaigns %}<p>{{ c.name }}</p>{% endfor %}
+</div>
+{% endblock %}
