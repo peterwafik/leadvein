@@ -163,3 +163,29 @@ async def find_save(request: Request, session: Session = Depends(get_session)):
     create_segment(session, u.buyer_account_id, name, composition,
                    origin_key=form.get("origin_key", "") or "")
     return redirect("/app/audiences")
+
+
+@router.get("/audiences")
+def audiences_page(request: Request, session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    from app.core.targeting.segments import list_segments
+    from app.core.db import LeadRecipe
+    segs = list_segments(session, u.buyer_account_id)
+    legacy = session.exec(select(LeadRecipe).where(
+        LeadRecipe.buyer_account_id == u.buyer_account_id)).all()
+    return templates.TemplateResponse(request, "audiences.html", {
+        "request": request, "user": u, "segments": segs, "legacy": legacy,
+        "csrf": ensure_csrf(request)})
+
+
+@router.post("/audiences/{segment_id}/delete", dependencies=[Depends(csrf_protect)])
+def audience_delete(request: Request, segment_id: int,
+                    session: Session = Depends(get_session)):
+    u = _buyer(request, session)
+    if not u:
+        return redirect("/login")
+    from app.core.targeting.segments import delete_segment
+    delete_segment(session, segment_id, u.buyer_account_id)
+    return redirect("/app/audiences")
