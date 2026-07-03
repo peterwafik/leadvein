@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from app.core.compliance import audit
-from app.core.db import (BuyerAccount, Lead, LeadRecipe, PurchasedLead,
+from app.core.db import (BuyerAccount, Lead, PurchasedLead,
                          Segment, SuppressionList, SuppressionEntry, CreditTransaction, _now)
 from app.core.export_leads import export_purchased_csv
 from app.core.masking import unlock_view, assert_owned
@@ -297,8 +297,12 @@ def run_estimate(session, buyer_account_id, body: dict):
         from app.quality.profiles.combine import combine_profiles
         ctx = {"quality_profile": combine_profiles(profiles)}
     from app.core.targeting.estimate import estimate as targeting_estimate
+    try:
+        sample = max(1, min(60, int(body.get("sample", 9))))
+    except (ValueError, TypeError):
+        sample = 9
     est = targeting_estimate(session, buyer_account_id, composition,
-                             sample=int(body.get("sample", 9)), ctx=ctx)
+                             sample=sample, ctx=ctx)
     # Enrich masked samples with quality tiers at the web layer (core stays
     # quality-free). Sample counts are <=60; a per-id refetch is fine.
     enriched = []

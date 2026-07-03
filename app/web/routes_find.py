@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 
 from fastapi import APIRouter, Depends, Request
@@ -106,7 +105,10 @@ async def find_compile(request: Request, session: Session = Depends(get_session)
     answers = body.get("answers") or {}
     campaign_key = body.get("campaign_key", "") or ""
 
-    composition = assemble_composition(answers)
+    try:
+        composition = assemble_composition(answers)
+    except (ValueError, TypeError):
+        return Response(status_code=400)
     quality_keys: list[str] = []
     gated_notices: list[dict] = []
     scoring_profile_key = ""
@@ -119,15 +121,14 @@ async def find_compile(request: Request, session: Session = Depends(get_session)
         gated_notices = [{"path": p, "reason": "requires licensed source"}
                          for p in json.loads(camp.gated_signals or "[]")]
         scoring_profile_key = camp.scoring_profile_key or ""
-    ck = channel_profile_key(answers.get("contact_channel", ""))
+    try:
+        ck = channel_profile_key(answers.get("contact_channel", ""))
+    except (ValueError, TypeError):
+        return Response(status_code=400)
     if ck and ck not in quality_keys:
         quality_keys.append(ck)
 
     sentence = render_sentence(session, composition, quality_profile_keys=quality_keys)
-    comp_hash = hashlib.sha256(
-        json.dumps(composition, sort_keys=True).encode()).hexdigest()[:16]
-    audit(session, u.id, "find.compile", "Campaign", campaign_key or "custom",
-          {"composition_hash": comp_hash})
     return JSONResponse({"composition": composition, "sentence": sentence,
                          "quality_profile_keys": quality_keys,
                          "gated_notices": gated_notices,

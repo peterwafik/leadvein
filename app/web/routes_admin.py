@@ -136,6 +136,8 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
                     AdapterQuery(area={"city": city}, categories=cats, limit=100),
                     scoring_profile_key=scoring_profile_key,
                     enrich_fn=_enrich_for_admin, actor_user_id=u.id)
+    from app.geo.coverage import invalidate_geo_counts
+    invalidate_geo_counts()
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": _generic_ingest_keys(),
         "result": counts, "csrf": ensure_csrf(request)})

@@ -6,8 +6,8 @@
 {% block body %}
 <script>
   window._csrf = "{{ csrf }}";
-  window._prefill = {{ prefill|safe if prefill else 'null' }};
-  window._preset = {{ preset|safe if preset else 'null' }};
+  window._prefill = {{ prefill|tojson if prefill else 'null' }};
+  window._preset = {{ preset|tojson if preset else 'null' }};
   window._mode = "{{ mode }}";
 </script>
 
@@ -1141,7 +1141,7 @@
   function bootstrap() {
     applyMode();
     if (window._prefill) {
-      const pf = window._prefill;
+      const pf = typeof window._prefill === 'string' ? JSON.parse(window._prefill) : window._prefill;
       state.campaignKey = pf.campaign_key || '';
       const origin = $('[data-save-origin]'); if (origin) origin.value = state.campaignKey;
       if (pf.answers) {
@@ -1156,8 +1156,9 @@
       if (state.mode === 'guided') setStep(2);
       compileAndEstimate();
     } else if (window._preset) {
-      state.advancedComposition = window._preset;
-      advLoadComposition(window._preset);
+      const pr = typeof window._preset === 'string' ? JSON.parse(window._preset) : window._preset;
+      state.advancedComposition = pr;
+      advLoadComposition(pr);
       const det = $('[data-advanced]'); if (det) det.open = true;
       if (state.mode === 'guided') setStep(5);
       compileAndEstimate();
