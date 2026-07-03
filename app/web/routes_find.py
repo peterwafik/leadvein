@@ -30,6 +30,14 @@ def _buyer(request: Request, session: Session):
     return u
 
 
+def _viewer(request: Request, session: Session):
+    """Allows both buyers and admins to read-only endpoints (find, compile, estimate)."""
+    u = current_user(request, session)
+    if not u or u.role not in ("buyer", "admin"):
+        return None
+    return u
+
+
 def _category_counts(session: Session) -> list[dict]:
     rows = session.exec(
         select(LeadCategoryLink.category_key, func.count(LeadCategoryLink.lead_id))
@@ -50,15 +58,17 @@ def _tech_groups(recipes) -> dict[str, list[dict]]:
 
 @router.get("/find")
 def find_page(request: Request, session: Session = Depends(get_session)):
-    u = _buyer(request, session)
+    u = _viewer(request, session)
     if not u:
         return redirect("/login")
     from app.fingerprints.library import list_recipes
     recipes = list_recipes(session)
     counts = geo_lead_counts(session)["countries"]
+    # Admins have no buyer_account_id; show '—' in the credits pill instead.
+    credits = balance(session, u.buyer_account_id) if u.role == "buyer" else None
     ctx: dict = {
         "request": request, "user": u, "csrf": ensure_csrf(request),
-        "credits": balance(session, u.buyer_account_id),
+        "credits": credits,
         "campaigns": list_active(session),
         "countries": [{"code": c.country_code, "name": c.country_name,
                        "lead_count": counts.get(c.country_code, 0)}
@@ -95,7 +105,7 @@ def find_page(request: Request, session: Session = Depends(get_session)):
 
 @router.post("/find/compile", dependencies=[Depends(csrf_protect_json)])
 async def find_compile(request: Request, session: Session = Depends(get_session)):
-    u = _buyer(request, session)
+    u = _viewer(request, session)
     if not u:
         return Response(status_code=401)
     try:
@@ -137,15 +147,17 @@ async def find_compile(request: Request, session: Session = Depends(get_session)
 
 @router.post("/find/estimate", dependencies=[Depends(csrf_protect_json)])
 async def find_estimate(request: Request, session: Session = Depends(get_session)):
-    u = _buyer(request, session)
+    u = _viewer(request, session)
     if not u:
         return Response(status_code=401)
     try:
         body = await request.json()
     except Exception:
         return Response(status_code=400)
+    # Admins have no buyer_account_id; pass None (no buyer suppression applied).
+    buyer_account_id = u.buyer_account_id if u.role == "buyer" else None
     try:
-        return run_estimate(session, u.buyer_account_id, body)
+        return run_estimate(session, buyer_account_id, body)
     except (ValueError, KeyError, TypeError):
         return Response(status_code=400)
 

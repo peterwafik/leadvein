@@ -47,24 +47,37 @@ def selects(view: dict, composition: dict) -> bool:
     return evaluate(view, composition) is True
 
 
+def _node_clause(session, node):
+    """Return a SQL clause for a single predicate node, or None if not pushable."""
+    if "op" in node or node.get("negate"):
+        return None
+    pred = registry.get(node["predicate"])
+    fn = getattr(pred, "sql_pushdown", None)
+    return fn(session, node.get("params", {})) if fn is not None else None
+
+
 def _pushdown_clauses(session, composition):
     if composition.get("op") != "AND":
         return None
+    from sqlalchemy import or_
     clauses = []
     for node in composition.get("nodes", []):
-        if "op" in node or node.get("negate"):
+        if node.get("op") == "OR":
+            children = node.get("nodes", [])
+            child_clauses = [_node_clause(session, c) for c in children]
+            if children and all(c is not None for c in child_clauses):
+                clauses.append(or_(*child_clauses))
             continue
-        pred = registry.get(node["predicate"])
-        fn = getattr(pred, "sql_pushdown", None)
-        if fn is not None:
-            clause = fn(session, node.get("params", {}))
-            if clause is not None:
-                clauses.append(clause)
+        clause = _node_clause(session, node)
+        if clause is not None:
+            clauses.append(clause)
     return clauses
 
 
-def matching_by_composition(session, composition, *, exclude_lead_ids=frozenset()):
-    clauses = _pushdown_clauses(session, composition)
+def matching_by_composition(session, composition, *, exclude_lead_ids=frozenset(),
+                            extra_clauses=None):
+    clauses = list(_pushdown_clauses(session, composition) or [])
+    clauses.extend(extra_clauses or [])
     if clauses:
         candidates = session.exec(select(Lead).where(*clauses)).all()
     else:

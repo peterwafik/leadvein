@@ -16,6 +16,7 @@ from app.enrich.website import enrich_website
 from app.scoring.engine import score
 from app.scoring.profiles import registry as profile_registry
 from app.quality.stamp import build_validation, quality_score
+from app.quality.ordinals import apply_tier_columns
 
 
 def _lead_context(n: NormalizedLead, enrichment: dict) -> dict:
@@ -87,6 +88,7 @@ def ingest(session: Session, adapter, query: AdapterQuery, *, scoring_profile_ke
             retention_expiry=expiry_for(_now()),
             dedupe_key=key,
             validation_json=json.dumps(_val), completeness_score=quality_score(_val))
+        apply_tier_columns(lead_obj, _val)
         session.add(lead_obj)
         session.flush()  # assign lead_obj.id
         from app.core.leadcats import sync_lead_categories
@@ -117,6 +119,7 @@ def merge_or_create(
     source_url: str = "",
     enrichment: dict | None = None,
     country_override: str = "",
+    mx_lookup=None,
 ) -> Lead:
     """Find the matching Lead and gap-fill from *normalized*, or create a new one.
 
@@ -170,6 +173,12 @@ def merge_or_create(
         if not existing_cats and normalized.category_keys:
             existing.category_keys_json = json.dumps(normalized.category_keys)
             stamp_provenance(existing, "category_keys", source_key, license)
+            # Keep the normalized link index in sync so LeadCategoryLink rows
+            # reflect the newly written category_keys_json.  Covers ALL callers
+            # (bulk, fingerprint ingest_normalized, waterfall merges).
+            # existing.id is already set (row was found by find_existing/flush).
+            from app.core.leadcats import sync_lead_categories
+            sync_lead_categories(session, existing)
 
         # Attributes: per-key waterfall — add only keys absent from existing.
         existing_attrs: dict = json.loads(existing.attributes_json or "{}")
@@ -203,9 +212,10 @@ def merge_or_create(
                 "opening_hours": "",
                 "website_url": existing.website_url or "",
                 "date_last_verified": existing.date_last_verified or _now(),
-            })
+            }, mx_lookup=mx_lookup)
             existing.validation_json = json.dumps(_val)
             existing.completeness_score = quality_score(_val)
+            apply_tier_columns(existing, _val)
 
         session.add(existing)
         return existing
@@ -230,7 +240,7 @@ def merge_or_create(
         "opening_hours": normalized.opening_hours or "",
         "website_url": normalized.website_url,
         "date_last_verified": _now(),
-    })
+    }, mx_lookup=mx_lookup)
 
     # Optional scoring — callers that supply a profile get subscores; others get 0.
     score_total, subscores_val, explanation = 0, {}, ""
@@ -282,6 +292,7 @@ def merge_or_create(
         validation_json=json.dumps(_val),
         completeness_score=quality_score(_val),
     )
+    apply_tier_columns(lead_obj, _val)
     session.add(lead_obj)
     session.flush()  # assign PK so stamp_provenance can reference it
 
@@ -312,6 +323,7 @@ def ingest_normalized(
     attribution: str = "",
     scoring_profile_key: str = "",
     enrich_fn=enrich_website,
+    mx_lookup=None,
 ) -> dict:
     """Ingest pre-normalised leads via ``merge_or_create``.
 
@@ -350,6 +362,7 @@ def ingest_normalized(
             source_name=source_name,
             source_url=source_url,
             enrichment=enrichment,
+            mx_lookup=mx_lookup,
         )
         counts["stored"] += 1
 

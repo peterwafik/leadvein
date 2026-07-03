@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 from fastapi import APIRouter, Depends, Request, Form
@@ -7,6 +8,7 @@ from sqlmodel import Session, select
 
 from app.adapters import registry as adapter_registry
 from app.adapters.base import AdapterQuery
+from app.adapters.geofabrik import REGIONS
 from app.core.compliance import audit, lead_opted_out
 from app.core.retention import purge_expired, expired_count
 from app.core.db import (Lead, LeadSource, AuditLog, OptOutRequest, IngestionJob,
@@ -17,6 +19,7 @@ from app.enrich.website import enrich_website
 from app.ingestion.pipeline import ingest
 from app.web.csrf import ensure_csrf, csrf_protect
 from app.web.deps import templates, get_session, current_user, redirect
+from app.web import deps as _web_deps
 
 router = APIRouter(prefix="/admin")
 
@@ -36,10 +39,16 @@ def _generic_ingest_keys() -> list[str]:
     FIX 1a: fingerprint_discovery adapters require a ``session`` keyword on
     discover()/normalize() and use ingest_normalized (not ingest).  They MUST
     NOT be surfaced in the generic ingest dropdown or executed by ingest_run.
+
+    bulk_only adapters (e.g. osm_geofabrik) are driven by the background
+    bulk-import job and raise NotImplementedError in discover/normalize — they
+    MUST also be excluded, regardless of their meta.type (which may coincide
+    with legitimate sync adapters such as osm_overpass / open_data).
     """
     return [
         k for k in adapter_registry.all_keys()
         if adapter_registry.get(k).meta.type != "fingerprint_discovery"
+        and not getattr(adapter_registry.get(k), "bulk_only", False)
     ]
 
 
@@ -78,19 +87,54 @@ def purge_expired_route(request: Request, session: Session = Depends(get_session
     return redirect("/admin")
 
 
+@router.post("/backfill-tiers", dependencies=[Depends(csrf_protect)])
+def backfill_tiers(request: Request, session: Session = Depends(get_session)):
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    import json as _json
+    from sqlalchemy import text
+    from app.core.db import Lead
+    from app.quality.ordinals import apply_tier_columns, FIELDS
+    # Additive SQLite migration for pre-existing dev DBs.
+    # NOTE: actual table name is lv_lead (SQLModel tablename), not 'lead'.
+    for col in [f"tier_{f}" for f in FIELDS] + ["tier_contact"]:
+        try:
+            session.exec(text(f"ALTER TABLE lv_lead ADD COLUMN {col} INTEGER DEFAULT 0"))
+        except Exception:
+            pass          # column already exists
+        session.exec(text(
+            f"CREATE INDEX IF NOT EXISTS ix_lv_lead_{col} ON lv_lead ({col})"))
+    n = 0
+    for lead in session.exec(select(Lead)).all():
+        apply_tier_columns(lead, _json.loads(lead.validation_json or "{}"))
+        session.add(lead)
+        n += 1
+    session.commit()
+    audit(session, u.id, "admin.backfill_tiers", "Lead", "all", {"count": n})
+    return redirect("/admin")
+
+
 @router.get("/ingest")
 def ingest_page(request: Request, session: Session = Depends(get_session)):
     u = _admin(request, session)
     if not u:
         return redirect("/login")
     from app.core.db import IngestRequest
+    from app.web import bulk_jobs
     open_requests = session.exec(select(IngestRequest).where(
         IngestRequest.status == "open").order_by(IngestRequest.created_at)).all()
+    # Detect an actively-running bulk job so the template can server-render the
+    # cancel affordance immediately (Fix A: cancel visible during live run).
+    active = bulk_jobs.active_job(session)
+    running_job = active is not None and active.status == "running"
     # FIX 1a: only show adapters compatible with the generic ingest() runner
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": _generic_ingest_keys(),
+        "regions": REGIONS,
         "result": None, "csrf": ensure_csrf(request),
-        "open_requests": open_requests})
+        "open_requests": open_requests,
+        "running_job": running_job})
 
 
 @router.post("/ingest-request/{req_id}/close", dependencies=[Depends(csrf_protect)])
@@ -122,6 +166,7 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
         return templates.TemplateResponse(request, "admin_ingest.html", {
             "request": request, "user": u,
             "adapters": _generic_ingest_keys(),
+            "regions": REGIONS,
             "result": None,
             "error": (
                 f"Adapter '{adapter_key}' is not compatible with the generic ingest "
@@ -140,6 +185,7 @@ def ingest_run(request: Request, adapter_key: str = Form(...), city: str = Form(
     invalidate_geo_counts()
     return templates.TemplateResponse(request, "admin_ingest.html", {
         "request": request, "user": u, "adapters": _generic_ingest_keys(),
+        "regions": REGIONS,
         "result": counts, "csrf": ensure_csrf(request)})
 
 
@@ -389,6 +435,60 @@ def recipe_promote(
         audit(session, u.id, "promote_recipe", "FingerprintRecipe", recipe_key,
               {"enabled": True})
     return redirect("/admin/recipes")
+
+
+# ---------------------------------------------------------------------------
+# Bulk import (Geofabrik extract) — background job, progress, cancel
+# ---------------------------------------------------------------------------
+
+@router.post("/bulk-import", dependencies=[Depends(csrf_protect)])
+def bulk_import_start(
+    request: Request,
+    region: str = Form(...),
+    scoring_profile_key: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    """Start a one-at-a-time background bulk import.  Redirects with ?bulk=busy
+    when a job is already running so the page can surface the conflict."""
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    from app.web import bulk_jobs
+    try:
+        bulk_jobs.start_bulk_job(_web_deps._engine, region, scoring_profile_key, u.id)
+    except RuntimeError:
+        return redirect("/admin/ingest?bulk=busy")
+    return redirect("/admin/ingest")
+
+
+@router.get("/bulk-import/status")
+def bulk_import_status(request: Request, session: Session = Depends(get_session)):
+    """Return JSON with the latest bulk-import job's status and funnel counts."""
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    from app.web import bulk_jobs
+    job = bulk_jobs.active_job(session)
+    if job is None:
+        return {"job_id": None, "status": "idle", "counts": {}}
+    counts: dict = {}
+    try:
+        counts = json.loads(job.counts_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        counts = {}
+    return {"job_id": job.id, "status": job.status, "counts": counts}
+
+
+@router.post("/bulk-import/cancel", dependencies=[Depends(csrf_protect)])
+def bulk_import_cancel(request: Request, session: Session = Depends(get_session)):
+    """Signal the running bulk-import thread to stop; redirects to ingest page."""
+    u = _admin(request, session)
+    if not u:
+        return redirect("/login")
+    from app.web import bulk_jobs
+    job = bulk_jobs.active_job(session)
+    bulk_jobs.request_cancel(job.id if job else None)
+    return redirect("/admin/ingest")
 
 
 @router.post("/recipes/{recipe_key}/run", dependencies=[Depends(csrf_protect)])

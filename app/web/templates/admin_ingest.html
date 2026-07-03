@@ -4,6 +4,153 @@
 {% block body %}
 {{ ui.page_intro('Run ingestion', 'Fetch leads from a source adapter and store them in the inventory. Duplicates and compliance-blocked records are skipped automatically.') }}
 
+{# ── Bulk import (Geofabrik extract) ──────────────────────────────────────── #}
+{% call ui.card(extra='p-5 mb-6') %}
+<h3 class="text-base font-semibold text-ink-900 mb-1">Bulk import (Geofabrik extract)</h3>
+<p class="mt-1 mb-4 text-sm text-ink-500 max-w-2xl">
+  Downloads the full country extract (Great Britain ≈ 1.5–2 GB) and imports every business-bearing
+  OSM element. Takes minutes for small regions, tens of minutes for a country.
+  No per-lead website enrichment during bulk — run enrichment separately on subsets.
+  Funnel counts below are measured, not promised.
+</p>
+
+{% if request.query_params.get('bulk') == 'busy' %}
+{{ ui.banner('A bulk import is already running. Wait for it to finish or cancel it below.', 'warn') }}
+{% endif %}
+
+<form method="post" action="/admin/bulk-import" class="grid gap-4 sm:grid-cols-2 mb-5">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+
+  {% call ui.field('Region', 'Country or area to import from Geofabrik.') %}
+    <div class="relative">
+      <select name="region"
+              class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-9 text-sm text-ink-900 shadow-sm transition hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+        {% for key, info in regions.items() %}
+          <option value="{{ key }}">{{ info.label }}</option>
+        {% endfor %}
+      </select>
+      <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+  {% endcall %}
+
+  {% call ui.field('Scoring profile key', 'Leave blank to skip scoring (recommended for large runs).') %}
+    <input name="scoring_profile_key" value="" placeholder="(blank = no scoring)"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition placeholder:text-ink-400 hover:border-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25">
+  {% endcall %}
+
+  <div class="sm:col-span-2 flex justify-end border-t border-slate-100 pt-4">
+    {{ ui.btn('Start bulk import', type='submit', kind='primary') }}
+  </div>
+</form>
+
+<div id="bulk-status"></div>
+
+{# Fix A: Cancel button is always server-rendered; hidden when no job is running.
+   JS poll toggles visibility so the button appears/disappears without a page reload. #}
+<div id="bulk-cancel-wrap"{% if not running_job %} class="hidden"{% endif %}>
+  <form method="post" action="/admin/bulk-import/cancel" class="mt-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button type="submit" class="inline-flex items-center text-sm font-semibold text-red-600 border border-red-200 rounded-lg px-4 py-2 bg-white hover:bg-red-50 transition">Cancel import</button>
+  </form>
+</div>
+
+<script>
+(function () {
+  var csrf = {{ csrf | tojson }};
+  var sd = document.getElementById('bulk-status');
+  var cancelWrap = document.getElementById('bulk-cancel-wrap');
+  var timer = null;
+
+  // Fix B: phase → human-readable copy shown while counts are still blank
+  var phaseLabels = {
+    'downloading': 'Downloading extract…',
+    'parsing':     'Parsing extract…',
+    'importing':   'Importing batches…'
+  };
+
+  function poll() {
+    fetch('/admin/bulk-import/status')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        render(d);
+        if (d.status === 'running') {
+          timer = setTimeout(poll, 3000);
+        } else {
+          timer = null;
+        }
+      })
+      .catch(function () { timer = setTimeout(poll, 5000); });
+  }
+
+  function render(d) {
+    // Fix A: toggle cancel button visibility based on polled status
+    if (cancelWrap) cancelWrap.classList.toggle('hidden', d.status !== 'running');
+
+    if (d.status === 'idle') {
+      sd.innerHTML = '<p class="text-sm text-ink-400 mt-1">No bulk import has run yet.</p>';
+      return;
+    }
+    var c = d.counts || {};
+    var isRunning = d.status === 'running';
+
+    // Fix B: show phase label alongside status badge
+    var phaseLabel = (isRunning && c.phase) ? phaseLabels[c.phase] || c.phase : '';
+    var badges = {
+      running:   '<span class="font-semibold text-amber-700">Running'
+                 + (phaseLabel ? ' — ' + phaseLabel : '…') + '</span>',
+      done:      '<span class="font-semibold text-emerald-700">Done</span>',
+      cancelled: '<span class="font-semibold text-slate-500">Cancelled</span>',
+      failed:    '<span class="font-semibold text-red-600">Failed</span>'
+    };
+    var statusBadge = badges[d.status] || d.status;
+
+    var funnel = [
+      ['Elements seen',              c.elements_seen              || 0],
+      ['Matched (has business data)', c.matched                   || 0],
+      ['Stored new',                  c.stored_new                || 0],
+      ['Merged',                      c.merged                    || 0],
+      ['Skipped (compliance)',        c.skipped_compliance        || 0],
+      ['Skipped (in-run duplicate)',  c.skipped_duplicate_in_run  || 0],
+      ['Hot so far (touched this run)', c.hot                     || 0]
+    ];
+
+    // Fix B: honest copy when counts are still blank (download/parse phase)
+    var hasRealCounts = !!(c.matched || c.elements_seen);
+    var countNote = (isRunning && !hasRealCounts && c.phase && c.phase !== 'importing')
+      ? '<p class="mt-2 text-[12px] text-ink-400">Counts appear after the first batch is imported.</p>'
+      : '';
+
+    var rows = funnel.map(function (pair) {
+      return '<div>'
+        + '<p class="text-[11px] font-semibold uppercase tracking-wide text-ink-400">' + pair[0] + '</p>'
+        + '<p class="text-2xl font-bold text-ink-900 mt-0.5">' + Number(pair[1]).toLocaleString() + '</p>'
+        + '</div>';
+    }).join('');
+
+    sd.innerHTML = '<div class="flex items-center gap-2 mb-3 text-sm">'
+      + '<span class="font-medium text-ink-700">Status:</span> '
+      + statusBadge
+      + '<span class="text-ink-400 ml-2">— job #' + d.job_id + '</span>'
+      + '</div>'
+      + '<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">' + rows + '</div>'
+      + countNote;
+
+    // Build error node via textContent — never via string-concatenated innerHTML
+    // so a server error message cannot inject markup.
+    if (c.error) {
+      var errP = document.createElement('p');
+      errP.className = 'mt-3 text-sm text-red-600';
+      errP.appendChild(document.createTextNode('Error: '));
+      errP.appendChild(document.createTextNode(c.error));
+      sd.appendChild(errP);
+    }
+  }
+
+  poll();
+}());
+</script>
+{% endcall %}
+
 {% if open_requests %}
 {% call ui.card('p-5 mb-6') %}
   <h3 class="text-sm font-semibold text-ink-900 mb-3">Requested areas

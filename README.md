@@ -76,6 +76,56 @@ doubles as an outreach tracker and supports opt-out handling.
   [GeoNames](https://www.geonames.org) (CC BY 4.0). Used only to render the area
   selector; lead coverage counts always come from actual inventory.
 
+## Bulk OSM ingestion (Geofabrik)
+
+The marketplace supports bulk ingestion of businesses from OpenStreetMap (OSM) via
+[Geofabrik](https://geofabrik.de) extracts. This runbook documents the process, constraints,
+and operational expectations.
+
+### Before you ingest
+
+- **Extract size:** GB extracts (e.g. United Kingdom) are roughly 1.5–2.0 GB to download.
+- **Parse time:** parsing a standard extract takes tens of minutes; monitor the admin Ingestion
+  progress log.
+- **Disk cache:** the node-location cache uses several GB of temporary disk during parsing.
+  It is **automatically deleted** after the run completes.
+- **No per-lead enrichment during bulk:** bulk imports do not fetch/verify individual websites or
+  perform verification enrichment. Run website enrichment separately on a filtered subset if needed.
+
+### Import & funnel
+
+- **Funnel visibility:** lead counts at each stage (raw → matched → stored/merged → hot) are
+  **measured on the admin Ingestion page after import completes**. These numbers are never
+  promised in advance; they reflect actual deduplication, quality filtering, and your region/
+  category selection.
+- **Re-import cadence:** bulks are imported manually. A weekly cadence is suggested; set a
+  calendar reminder or cron job to ingest fresh Geofabrik snapshots.
+- **Whole-planet:** out of scope. Ingest by country or region; combine smaller extracts if
+  you need multi-country coverage.
+- **Deduplication:** the current dedup key groups businesses by city + category. Phone-less
+  businesses that share a location and category **collapse into a single record** (a known
+  pilot limitation). If phone data is critical for your use case, contact the team.
+
+### Attribution & legal
+
+Lead records carry the source and license:
+- **Attribution:** © OpenStreetMap contributors (ODbL) · extract by Geofabrik GmbH
+- **License:** ODbL (Open Data Commons Open Database License). You are responsible for
+  complying with the terms when republishing or commercializing the data.
+
+### Operational triggers
+
+Monitor these signals after each import to decide whether to upgrade infrastructure:
+
+- **Second country ingest:** If you ingest OSM data from a second country (second bulk import),
+  verify that search latency (p95) stays at or below the target (0.5s at 250k records).
+- **Concurrent imports:** Running two bulk imports in parallel is not recommended; finish one
+  before starting the next. If you need concurrent ingestion, contact the team.
+- **Sustained latency misses:** If the admin search latency dashboard shows p95 > 1.0s
+  consistently (not just during import), trigger a scaling review. The current single-table
+  SQLite schema is optimized for ~250k hot leads; beyond that, migrate to Postgres and add
+  indexes.
+
 ## LeadVault (compliant B2B lead marketplace)
 
 Run the marketplace app:

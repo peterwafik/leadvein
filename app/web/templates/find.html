@@ -2,13 +2,14 @@
 {% import "components.html" as ui %}
 {% block title %} · Find leads{% endblock %}
 {% block heading %}Find leads{% endblock %}
-{% block topbar %}{{ ui.credits_pill(credits if credits is defined else '—') }}{% endblock %}
+{% block topbar %}{{ ui.credits_pill(credits if (credits is defined and credits is not none) else '—') }}{% endblock %}
 {% block body %}
 <script>
   window._csrf = "{{ csrf }}";
   window._prefill = {{ prefill|tojson if prefill else 'null' }};
   window._preset = {{ preset|tojson if preset else 'null' }};
   window._mode = "{{ mode }}";
+  window._isAdmin = {{ 'true' if user.role == 'admin' else 'false' }};
 </script>
 
 <div data-page="find" class="space-y-5">
@@ -359,6 +360,44 @@
         <p class="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-ink-400">Results</p>
         <div data-results-grid class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
       </div>
+
+      {# ── Admin bulk tools (owner-only, server-guarded) ─────────────────── #}
+      {% if user.role == 'admin' %}
+      <div id="adminBulkBar" class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-semibold text-amber-800">Admin — bulk tools</span>
+          <label class="flex items-center gap-2 text-[13px] text-amber-700 cursor-pointer">
+            <input type="checkbox" id="adminSelectAll" class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40">
+            Select all
+          </label>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" id="adminUnlockBtn"
+            class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 active:translate-y-px">
+            Unlock selected (<span id="adminSelectedCount">0</span>)
+          </button>
+          <button type="button" id="adminUnlockAllBtn"
+            class="inline-flex items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50">
+            Unlock all (<span id="adminUnlockAllCount">0</span>)
+          </button>
+          <button type="button" id="adminExportSelectedBtn"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 transition hover:bg-slate-50">
+            Export selected
+          </button>
+          <form id="adminExportAllForm" method="post" action="/admin/bulk/export"
+            class="inline-flex items-center gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <input type="hidden" name="format" value="csv">
+            <input type="hidden" name="composition" id="adminExportComposition" value="{}">
+            <button type="submit" id="adminExportAllBtn"
+              class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Export all (<span id="adminExportAllCount">—</span>)
+            </button>
+          </form>
+        </div>
+        <p class="text-[11.5px] text-amber-700">Reveal &amp; export bypass the economy (no charge, no <span class="font-medium">times_sold</span>) but keep the compliance spine. Export is capped at 10,000 rows — narrow the targeting to fit.</p>
+      </div>
+      {% endif %}
     </section>
   </div>
 
@@ -507,6 +546,17 @@
     } catch (e) { showError(); }
   }
 
+  // Fix C: event delegation for country-list — one stable listener avoids
+  // stale-node clicks when the list is rebuilt on every search keystroke.
+  const _countryListEl = $('[data-country-list]');
+  if (_countryListEl) {
+    _countryListEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-country-code]');
+      if (!btn) return;
+      selectCountry(btn.dataset.countryCode, btn.dataset.countryName);
+    });
+  }
+
   function renderCountries(countries) {
     const list = $('[data-country-list]');
     if (!list) return;
@@ -515,13 +565,15 @@
     countries.filter(c => !q || c.name.toLowerCase().indexOf(q) !== -1).forEach(c => {
       const btn = document.createElement('button');
       btn.type = 'button';
+      // Fix C: data-country-code/name used by delegation listener; no per-node click
+      btn.dataset.countryCode = c.code;
+      btn.dataset.countryName = c.name;
       btn.className = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-ink-700 transition hover:bg-brand-50' +
         (c.code === state.geoCountry ? ' bg-brand-50 font-semibold text-brand-700' : '');
       const nameEl = document.createElement('span');
       nameEl.className = 'flex-1'; nameEl.textContent = c.name;
       btn.appendChild(nameEl);
       btn.appendChild(covBadge(c.lead_count || 0));
-      btn.addEventListener('click', () => selectCountry(c.code, c.name));
       list.appendChild(btn);
     });
     if (!list.children.length) list.innerHTML = '<p class="px-2 py-4 text-[13px] text-ink-400">No countries match.</p>';
@@ -568,6 +620,23 @@
     renderGeoChips(); loadAreas(($('[data-area-search]').value || '')); compileAndEstimate();
   }
 
+  // Fix C: event delegation for area-list — one stable listener on the container.
+  // Per-node click listeners were removed from mkRow; delegation resolves the row
+  // via data-area-name/data-area-kind. "Request this area" keeps stopPropagation
+  // so it never triggers the delegation handler.
+  const _areaListEl = $('[data-area-list]');
+  if (_areaListEl) {
+    _areaListEl.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-area-name]');
+      if (!row) return;
+      const cb = row.querySelector('input[type="checkbox"]');
+      if (!cb) return;
+      if (e.target === cb) return; // native checkbox click already fires change
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  }
+
   function renderAreas(data) {
     const list = $('[data-area-list]');
     if (!list) return;
@@ -581,6 +650,9 @@
     const mkRow = (a, kind) => {
       const zero = !(a.lead_count > 0);
       const row = document.createElement('div');
+      // Fix C: data attributes for delegation; no per-node row click listener
+      row.dataset.areaName = a.name;
+      row.dataset.areaKind = kind;
       row.className = 'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-brand-50';
       const box = document.createElement('input');
       box.type = 'checkbox'; box.className = 'h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40';
@@ -597,7 +669,7 @@
         req.className = 'shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-ink-500 ring-1 ring-slate-200 transition hover:bg-slate-100';
         req.textContent = 'Request this area';
         req.addEventListener('click', async (e) => {
-          e.stopPropagation();
+          e.stopPropagation(); // Fix C: prevents area-list delegation from also firing
           req.disabled = true;
           try {
             const res = await fetch('/app/geo/ingest-request', {
@@ -611,12 +683,7 @@
         });
         row.appendChild(req);
       }
-      // Make the whole row clickable (not just the checkbox)
-      row.addEventListener('click', (e) => {
-        if (e.target === box) return; // native checkbox click already fires change
-        box.checked = !box.checked;
-        box.dispatchEvent(new Event('change'));
-      });
+      // Fix C: row click is now handled by the delegation listener above — no per-node handler.
       return row;
     };
     groups.forEach(g => {
@@ -940,22 +1007,29 @@
   /* ── Compile + estimate (debounced) ────────────────────────────────────── */
   let compileTimer = null;
   let _estimateSeq = 0;
+  // Fix D: track in-flight compile so Run can await it before firing the estimate.
+  // Starts as a resolved promise so the first Run click never blocks.
+  let _compileInFlight = Promise.resolve(null);
   function compileAndEstimate() { clearTimeout(compileTimer); compileTimer = setTimeout(_run, 350); }
 
   async function _run() {
     const seq = ++_estimateSeq;
     const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
     // 1) compile from answers (always — provides the sentence + quality keys)
+    // Fix D: expose a promise that resolves when the compile phase settles.
+    let _resolveCompile;
+    _compileInFlight = new Promise(resolve => { _resolveCompile = resolve; });
     try {
       const cRes = await fetch('/app/find/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
         body: JSON.stringify({ campaign_key: state.campaignKey, answers: state.answers })
       });
-      if (seq !== _estimateSeq) return;
+      if (seq !== _estimateSeq) { _resolveCompile(null); return; }
       if (cRes.ok) { state.compiled = await cRes.json(); }
       else if (cRes.status !== 401) { showError(); }
-    } catch (e) { if (seq !== _estimateSeq) return; showError(); }
+    } catch (e) { if (seq !== _estimateSeq) { _resolveCompile(null); return; } showError(); }
+    _resolveCompile(state.compiled); // compile settled — unblock any waiting Run handler
 
     if (seq !== _estimateSeq) return;
     renderSentence(usingAdvanced);
@@ -1018,6 +1092,8 @@
   function renderEstimate(data) {
     const body = $('[data-estimate-body]'); if (body) body.classList.remove('animate-pulse');
     const count = data.count || 0;
+    state.lastEstimateCount = count;
+    if (window._isAdmin) adminSyncExportAll();
     const cnt = $('[data-estimate-count]'); if (cnt) cnt.textContent = count.toLocaleString();
     const badge = $('[data-estimate-badge]'); if (badge) badge.textContent = count === 0 ? 'no matches' : (count === 1 ? '1 lead' : count + ' leads');
 
@@ -1050,6 +1126,9 @@
 
   function sampleCard(s, withUnlock) {
     const score = s.score_total || 0;
+    // Fix E: bulk-imported leads without a scoring profile have score_total=0 and
+    // no explanation — render "—" with a tooltip instead of the misleading "0" badge.
+    const unscored = score === 0 && !s.reason;
     const scoreClass = score >= 70 ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-ink-600';
     const cat = (s.category_keys && s.category_keys[0]) ? s.category_keys[0].replace(/_/g, ' ') : 'business';
     const loc = s.city || s.region || s.country || '—';
@@ -1057,7 +1136,9 @@
     const card = document.createElement('div');
     card.className = 'group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card transition hover:border-slate-300 hover:shadow-pop';
     const head = document.createElement('div'); head.className = 'flex items-start justify-between gap-2';
-    const sc = document.createElement('span'); sc.className = 'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[13px] font-bold ' + scoreClass; sc.textContent = score;
+    const sc = document.createElement('span'); sc.className = 'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[13px] font-bold ' + scoreClass;
+    sc.textContent = unscored ? '—' : score;
+    if (unscored) sc.title = 'Not scored';
     const src = document.createElement('span'); src.className = 'text-[11px] font-medium text-ink-400 text-right leading-tight'; src.textContent = source;
     head.appendChild(sc); head.appendChild(src); card.appendChild(head);
     const mid = document.createElement('div'); mid.className = 'mt-3';
@@ -1107,12 +1188,19 @@
       const hint = document.createElement('span'); hint.className = 'text-[12px] text-ink-400'; hint.textContent = 'Unlock to see contact details'; foot.appendChild(hint);
     }
     card.appendChild(foot);
+    // Admin-only: results-grid cards (withUnlock, real lead_id) get a selection
+    // checkbox + registration so bulk reveal/export can target them.
+    if (window._isAdmin && withUnlock && s.lead_id != null) adminDecorateCard(card, s);
     return card;
   }
 
   /* ── Run: full results grid (sample 60) ────────────────────────────────── */
   const runBtn = $('[data-run-btn]');
   if (runBtn) runBtn.addEventListener('click', async () => {
+    // Fix D: if a compile is in-flight, wait for it to settle before reading
+    // state.compiled — otherwise the grid fires with a stale composition and
+    // the seq guard discards the response, leaving the grid silently empty.
+    await _compileInFlight;
     const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
     const composition = usingAdvanced ? state.advancedComposition
                        : (state.compiled ? state.compiled.composition : { op: 'AND', nodes: [] });
@@ -1127,6 +1215,7 @@
       if (!res.ok) { showError(); return; }
       const data = await res.json();
       const wrap = $('[data-results-wrap]'); const grid = $('[data-results-grid]');
+      if (window._isAdmin) adminResetSelection();   // fresh results ⇒ fresh selection
       if (grid) grid.innerHTML = '';
       if (wrap) wrap.classList.remove('hidden');
       if ((data.count || 0) === 0) {
@@ -1134,8 +1223,189 @@
       } else {
         (data.samples || []).forEach(s => grid && grid.appendChild(sampleCard(s, true)));
       }
+      if (window._isAdmin) adminAfterResults();   // refresh "Unlock all (N)" + select-all state
     } catch (e) { showError(); } finally { runBtn.disabled = false; }
   });
+
+  {% if user.role == 'admin' %}
+  /* ══ Admin bulk tools (owner-only) ═══════════════════════════════════════
+     Rendered ONLY for admins — the '/admin/bulk/reveal' URL and the
+     'adminExportComposition' reference must never appear in buyer HTML.
+     Reveal/export bypass the economy but the server re-checks the compliance
+     spine (expiry, opt-out, global suppression, serve filters) on every row. */
+  const _adminSelected = new Set();   // lead_ids checked in the results grid
+  const _adminCards = new Map();      // lead_id → results-grid card element
+  const ADMIN_REVEAL_CAP = 500;       // server caps /reveal at 500 — chunk to fit
+
+  // The composition that the current on-screen estimate is bound to (advanced
+  // override wins, else the compiled answers) — same selection as _run().
+  function adminCurrentComposition() {
+    const usingAdvanced = !!(state.advancedComposition && (state.advancedComposition.nodes || []).length);
+    return usingAdvanced ? state.advancedComposition
+                         : (state.compiled ? state.compiled.composition : null);
+  }
+
+  function adminUpdateCount() {
+    const c = document.getElementById('adminSelectedCount');
+    if (c) c.textContent = String(_adminSelected.size);
+    const sa = document.getElementById('adminSelectAll');
+    if (sa) {
+      const boxes = $$('[data-admin-select]');
+      const checked = boxes.filter(b => b.checked).length;
+      sa.checked = boxes.length > 0 && checked === boxes.length;
+      sa.indeterminate = checked > 0 && checked < boxes.length;
+    }
+  }
+
+  // Bind "Export all" to the CURRENT composition + estimate count; disable it
+  // (never submit {}) until an estimate has actually compiled a composition.
+  function adminSyncExportAll() {
+    const comp = adminCurrentComposition();
+    const has = !!(comp && (comp.nodes || []).length);
+    const compEl = document.getElementById('adminExportComposition');
+    if (compEl) compEl.value = has ? JSON.stringify(comp) : '{}';
+    const btn = document.getElementById('adminExportAllBtn');
+    if (btn) { btn.disabled = !has; btn.title = has ? '' : 'Run an estimate first'; }
+    const cntEl = document.getElementById('adminExportAllCount');
+    if (cntEl) cntEl.textContent = has ? (state.lastEstimateCount || 0).toLocaleString() : '—';
+  }
+
+  function adminAfterResults() {
+    const uac = document.getElementById('adminUnlockAllCount');
+    if (uac) uac.textContent = String(_adminCards.size);
+    adminUpdateCount();
+  }
+
+  function adminResetSelection() {
+    _adminSelected.clear();
+    _adminCards.clear();
+    const sa = document.getElementById('adminSelectAll');
+    if (sa) { sa.checked = false; sa.indeterminate = false; }
+    const uac = document.getElementById('adminUnlockAllCount');
+    if (uac) uac.textContent = '0';
+    adminUpdateCount();
+  }
+
+  function adminDecorateCard(card, s) {
+    const id = s.lead_id;
+    card.dataset.leadId = String(id);
+    _adminCards.set(id, card);
+    const lbl = document.createElement('label');
+    lbl.className = 'mb-2 flex items-center gap-2 text-[12px] font-medium text-ink-500 cursor-pointer';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40';
+    box.setAttribute('data-admin-select', String(id));
+    box.checked = _adminSelected.has(id);
+    box.addEventListener('change', () => {
+      if (box.checked) _adminSelected.add(id); else _adminSelected.delete(id);
+      adminUpdateCount();
+    });
+    lbl.appendChild(box);
+    const t = document.createElement('span'); t.textContent = 'Select';
+    lbl.appendChild(t);
+    card.insertBefore(lbl, card.firstChild);
+  }
+
+  // Swap a masked results card to full detail (textContent-safe DOM only).
+  function adminApplyReveal(row) {
+    const card = _adminCards.get(row.lead_id);
+    if (!card || card.dataset.revealed === '1') return;
+    card.dataset.revealed = '1';
+    card.classList.add('ring-1', 'ring-brand-200');
+    const detail = document.createElement('div');
+    detail.className = 'mt-2.5 space-y-1 rounded-lg border border-brand-100 bg-brand-50/60 p-2.5 text-[12.5px]';
+    const bn = document.createElement('p');
+    bn.className = 'font-semibold text-ink-900';
+    bn.textContent = row.business_name || '—';
+    detail.appendChild(bn);
+    const addLine = (label, value) => {
+      if (!value) return;
+      const p = document.createElement('p'); p.className = 'text-ink-700';
+      const k = document.createElement('span'); k.className = 'text-ink-400'; k.textContent = label + ': ';
+      p.appendChild(k); p.appendChild(document.createTextNode(value));
+      detail.appendChild(p);
+    };
+    addLine('Phone', row.phone);
+    addLine('Email', row.public_email);
+    const url = row.website_url;
+    if (url) {
+      const p = document.createElement('p'); p.className = 'text-ink-700';
+      const k = document.createElement('span'); k.className = 'text-ink-400'; k.textContent = 'Website: ';
+      p.appendChild(k);
+      if (/^https?:\/\//i.test(url)) {
+        const a = document.createElement('a');
+        a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.className = 'text-brand-700 underline break-all';
+        p.appendChild(a);
+      } else {
+        p.appendChild(document.createTextNode(url));
+      }
+      detail.appendChild(p);
+    }
+    card.appendChild(detail);
+  }
+
+  // POST /admin/bulk/reveal in chunks of ≤500 (the server's per-call cap).
+  async function adminRevealLeads(ids) {
+    if (!ids.length) return;
+    for (let i = 0; i < ids.length; i += ADMIN_REVEAL_CAP) {
+      const chunk = ids.slice(i, i + ADMIN_REVEAL_CAP);
+      let res;
+      try {
+        res = await fetch('/admin/bulk/reveal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+          body: JSON.stringify({ lead_ids: chunk })
+        });
+      } catch (e) { showError(); return; }
+      if (!res.ok) { showError(); return; }
+      const data = await res.json();
+      (data.leads || []).forEach(adminApplyReveal);
+    }
+  }
+
+  // Build + submit a throwaway form-POST to /admin/bulk/export (native download).
+  function adminSubmitExport(fields) {
+    const f = document.createElement('form');
+    f.method = 'post'; f.action = '/admin/bulk/export';
+    const add = (n, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = n; i.value = v; f.appendChild(i); };
+    add('csrf_token', CSRF);
+    Object.keys(fields).forEach(k => add(k, fields[k]));
+    document.body.appendChild(f); f.submit(); document.body.removeChild(f);
+  }
+
+  const _adminSelectAll = document.getElementById('adminSelectAll');
+  if (_adminSelectAll) _adminSelectAll.addEventListener('change', () => {
+    $$('[data-admin-select]').forEach(b => {
+      b.checked = _adminSelectAll.checked;
+      const id = parseInt(b.getAttribute('data-admin-select'), 10);
+      if (_adminSelectAll.checked) _adminSelected.add(id); else _adminSelected.delete(id);
+    });
+    adminUpdateCount();
+  });
+  const _adminUnlockBtn = document.getElementById('adminUnlockBtn');
+  if (_adminUnlockBtn) _adminUnlockBtn.addEventListener('click', () => {
+    adminRevealLeads(Array.from(_adminSelected));
+  });
+  const _adminUnlockAllBtn = document.getElementById('adminUnlockAllBtn');
+  if (_adminUnlockAllBtn) _adminUnlockAllBtn.addEventListener('click', () => {
+    adminRevealLeads(Array.from(_adminCards.keys()));   // reveal current results in one click
+  });
+  const _adminExportSelectedBtn = document.getElementById('adminExportSelectedBtn');
+  if (_adminExportSelectedBtn) _adminExportSelectedBtn.addEventListener('click', () => {
+    if (!_adminSelected.size) { showError(); return; }
+    adminSubmitExport({ lead_ids: Array.from(_adminSelected).join(','), format: 'csv' });
+  });
+  const _adminExportAllForm = document.getElementById('adminExportAllForm');
+  if (_adminExportAllForm) _adminExportAllForm.addEventListener('submit', (e) => {
+    const comp = adminCurrentComposition();
+    if (!comp || !(comp.nodes || []).length) { e.preventDefault(); showError(); return; }
+    const compEl = document.getElementById('adminExportComposition');
+    if (compEl) compEl.value = JSON.stringify(comp);   // bind to CURRENT composition before submit
+  });
+  adminSyncExportAll();   // initial disabled state (no composition yet)
+  {% endif %}
 
   /* ── Bootstrap: prefill / preset ───────────────────────────────────────── */
   function bootstrap() {

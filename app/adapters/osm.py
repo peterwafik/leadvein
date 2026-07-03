@@ -5,6 +5,8 @@ from typing import Iterable
 import requests
 
 from app.adapters.base import SourceMeta, AdapterQuery, NormalizedLead
+from app.adapters.osm_common import normalized_from_tags
+from app.adapters.osm_tags import match_categories
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 USER_AGENT = ("LeadVault/0.1 (+https://example.com/contact; "
@@ -24,7 +26,6 @@ CATEGORY_TO_OSM = {
     "butcher": "shop=butcher", "florist": "shop=florist", "pharmacy": "amenity=pharmacy",
     "clothing_store": "shop=clothes", "hardware_store": "shop=hardware",
 }
-_OSM_TO_CATEGORY = {v: k for k, v in CATEGORY_TO_OSM.items()}
 
 
 def build_overpass_ql(area: dict, categories: list[str], limit: int = 100) -> str:
@@ -58,36 +59,18 @@ class OsmOverpassAdapter:
 
     def normalize(self, raw: dict) -> NormalizedLead | None:
         tags = raw.get("tags") or {}
-        name = tags.get("name")
-        if not name:
-            return None
-        cats = []
-        for tag_key in ("amenity", "shop", "leisure", "tourism"):
-            if tag_key in tags:
-                ext = f"{tag_key}={tags[tag_key]}"
-                if ext in _OSM_TO_CATEGORY:
-                    cats.append(_OSM_TO_CATEGORY[ext])
+        cats = match_categories(tags)
         lat = raw.get("lat") or (raw.get("center") or {}).get("lat")
         lon = raw.get("lon") or (raw.get("center") or {}).get("lon")
-        street = " ".join(x for x in (tags.get("addr:housenumber"),
-                                      tags.get("addr:street")) if x)
-        return NormalizedLead(
-            business_name=name,
-            category_keys=cats,
-            address={"line1": street, "city": tags.get("addr:city", ""),
-                     "region": tags.get("addr:state", ""),
-                     "postal_code": tags.get("addr:postcode", ""),
-                     "country": tags.get("addr:country", ""),
-                     "lat": lat, "lon": lon},
-            phone=tags.get("phone") or tags.get("contact:phone", ""),
-            public_email=tags.get("email") or tags.get("contact:email", ""),
-            website_url=tags.get("website") or tags.get("contact:website", ""),
-            opening_hours=tags.get("opening_hours", ""),
-            attributes={"open_7_days": "Su" in tags.get("opening_hours", "")
-                        or "Mo-Su" in tags.get("opening_hours", "")},
-            source_key=self.meta.key, source_url=OVERPASS_URL,
-            source_license=self.meta.license,
-            raw_ref=f"{raw.get('type','node')}/{raw.get('id','')}")
+        lead = normalized_from_tags(
+            tags, lat=lat, lon=lon,
+            raw_ref=f"{raw.get('type', 'node')}/{raw.get('id', '')}",
+            categories=cats, source_key=self.meta.key,
+        )
+        if lead is not None:
+            lead.source_url = OVERPASS_URL
+            lead.source_license = self.meta.license
+        return lead
 
     def attribution(self) -> str:
         return "© OpenStreetMap contributors, ODbL (https://www.openstreetmap.org/copyright)"

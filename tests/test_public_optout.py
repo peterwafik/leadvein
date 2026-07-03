@@ -44,6 +44,7 @@ def test_public_optout_suppresses_across_search_preview_unlock_export():
                     date_last_verified=_now(), price_credits=3)
         s.add(lead); s.commit(); s.refresh(lead)
         sync_lead_categories(s, lead)
+        s.commit()  # commit category links before opening the next session
         lead_id, ba_id, u_id = lead.id, ba.id, u.id
 
     f = {**DEFAULT_FILTERS, "categories": ["restaurant"], "city": "London"}

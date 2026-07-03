@@ -16,6 +16,7 @@ from app.core.auth import create_user
 from app.seed import seed_all
 from app.web import deps
 from app.web.routes_admin import router as admin_router
+from app.web.routes_admin_bulk import router as admin_bulk_router
 from app.web.routes_auth import router as auth_router
 from app.web.routes_buyer import router as buyer_router
 from app.web.routes_billing import router as billing_router
@@ -57,6 +58,8 @@ def _seed_accounts() -> None:
         seed_recipes(s)
         from app.geo.ref import seed_geo_fixture
         seed_geo_fixture(s)
+        from app.adapters.osm_tags import seed_osm_tag_mappings
+        seed_osm_tag_mappings(s)
         creds = config.admin_credentials()
         if creds is not None:
             admin_email, admin_pw = creds
@@ -80,6 +83,7 @@ from app.web.routes_find import router as find_router
 app.include_router(auth_router)
 app.include_router(buyer_router)
 app.include_router(admin_router)
+app.include_router(admin_bulk_router)
 app.include_router(billing_router)
 app.include_router(public_router)
 app.include_router(geo_router)

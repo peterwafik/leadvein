@@ -295,7 +295,9 @@ def run_estimate(session, buyer_account_id, body: dict):
     ctx = None
     if profiles:
         from app.quality.profiles.combine import combine_profiles
-        ctx = {"quality_profile": combine_profiles(profiles)}
+        from app.quality.sql_gate import profile_clauses
+        prof = combine_profiles(profiles)
+        ctx = {"quality_profile": prof, "sql_clauses": profile_clauses(prof) or []}
     from app.core.targeting.estimate import estimate as targeting_estimate
     try:
         sample = max(1, min(60, int(body.get("sample", 9))))

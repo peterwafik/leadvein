@@ -16,3 +16,4 @@ bcrypt==4.3.0
 stripe==10.10.0
 phonenumbers==8.13.45
 dnspython==2.8.0
+osmium==4.0.2
