@@ -11,6 +11,7 @@ leadscraper-*.png
 .superpowers/
 .claude/
 leadvault-*.png
+var/
 
 # installed agent skills (npx skills)
 .agents/
