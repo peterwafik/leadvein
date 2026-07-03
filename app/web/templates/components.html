@@ -97,6 +97,35 @@
   {% endif %}
 {% endmacro %}
 
+{% macro tier_chip(field_label, info, meaning='') %}
+  {% set t = info.tier if info else 'absent' %}
+  {% if t == 'validated' %}
+    <span class="inline-flex items-center gap-1.5 rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-800">✓✓ {{ field_label }} — Validated{% if meaning %} <span class="text-brand-700/70">· {{ meaning }}</span>{% endif %}</span>
+  {% elif t == 'present' %}
+    <span class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-ink-600">✓ {{ field_label }} — Present</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro quality_chips(q, tech=None, detail=False) %}
+<div class="flex flex-wrap gap-1.5">
+  {{ tier_chip('Phone', q.phone, ('format + line type' ~ (' (' ~ q.phone.line_type|replace('_',' ') ~ ')' if q.phone.line_type is defined and q.phone.line_type else ''))) }}
+  {{ tier_chip('Email', q.email, 'syntax + MX') }}
+  {{ tier_chip('Address', q.address, 'geocoded') }}
+  {{ tier_chip('Website', q.website, 'reachable') }}
+  <span data-tier-locked class="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-ink-400">🔒 Verified-live — requires licensed provider</span>
+</div>
+{% if detail %}
+  {% for f, label in [('phone','Phone'),('email','Email'),('address','Address'),('website','Website')] %}
+    {% if q[f].tier == 'absent' %}<p class="mt-1 text-[12px] text-ink-400">— {{ label }} not yet available</p>{% endif %}
+  {% endfor %}
+{% endif %}
+{% if tech %}
+  <p class="mt-2 flex items-center gap-2 text-[12.5px] text-ink-600">Tech match: <b>{{ tech.recipe_key }}</b>
+    <span class="inline-flex gap-0.5">{% for i in range(5) %}<i class="h-1.5 w-3.5 rounded-full {{ 'bg-brand-500' if i < tech.strength else 'bg-slate-200' }}"></i>{% endfor %}</span>
+    {{ tech.strength }} signal{{ 's' if tech.strength != 1 }} confirmed on their own homepage</p>
+{% endif %}
+{% endmacro %}
+
 {# a masked lead card for the marketplace #}
 {% macro lead_card(c) %}
 <div class="group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-card transition hover:border-slate-300 hover:shadow-pop">
@@ -109,10 +138,16 @@
     <p class="text-sm font-semibold capitalize text-ink-900">{{ (c.category_keys[0] if c.category_keys else 'business')|replace('_',' ') }}</p>
     <p class="text-[13px] text-ink-500">{{ c.city or c.region or c.country or '—' }}</p>
   </div>
-  <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
-    {% if c.has_phone %}{{ badge('✓ Validated phone','green') }}{% endif %}
-    {% if c.has_email %}{{ badge('Email','neutral') }}{% endif %}
-    {% if c.has_website %}{{ badge('Website','neutral') }}{% endif %}
+  <div class="mt-2.5">
+    {% if c.quality is defined and c.quality %}
+      {{ quality_chips(c.quality, c.tech_match) }}
+    {% else %}
+      <div class="flex flex-wrap items-center gap-1.5">
+        {% if c.has_phone %}{{ badge('✓ Validated phone','green') }}{% endif %}
+        {% if c.has_email %}{{ badge('Email','neutral') }}{% endif %}
+        {% if c.has_website %}{{ badge('Website','neutral') }}{% endif %}
+      </div>
+    {% endif %}
   </div>
   <p class="mt-2.5 line-clamp-2 text-[12.5px] leading-snug text-ink-500">{{ c.reason }}</p>
   <div class="mt-auto flex items-center justify-between border-t border-slate-100 pt-3 mt-3">

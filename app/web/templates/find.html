@@ -37,6 +37,11 @@
   <template id="tpl-coverage-has"><span class="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-800 tabular-nums"></span></template>
   <template id="tpl-coverage-none"><span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-ink-400">0 — not yet ingested</span></template>
 
+  {# Tier chip templates — single source of truth (mirror ui.tier_chip / ui.quality_chips in components.html) #}
+  <template id="tpl-tier-validated"><span class="inline-flex items-center gap-1.5 rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-800"></span></template>
+  <template id="tpl-tier-present"><span class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-ink-600"></span></template>
+  <template id="tpl-tier-locked"><span data-tier-locked class="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-ink-400">🔒 Verified-live — requires licensed provider</span></template>
+
   <div id="stepWrap" class="gap-6">
     {# ── Left column: step panels 1–4 + guided nav ───────────────────────── #}
     <div data-left-col class="space-y-5">
@@ -1041,10 +1046,34 @@
     const lc = document.createElement('p'); lc.className = 'text-[13px] text-ink-500'; lc.textContent = loc;
     mid.appendChild(cn); mid.appendChild(lc); card.appendChild(mid);
     const tags = document.createElement('div'); tags.className = 'mt-2.5 flex flex-wrap items-center gap-1.5';
-    function tag(t, cls) { const e = document.createElement('span'); e.className = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ' + cls; e.textContent = t; tags.appendChild(e); }
-    if (s.has_phone) tag('✓ Validated phone', 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100');
-    if (s.has_email) tag('Email', 'bg-slate-100 text-ink-600');
-    if (s.has_website) tag('Website', 'bg-slate-100 text-ink-600');
+    if (s.quality) {
+      // Use template-sourced chip classes (single source of truth with tpl-tier-* templates above)
+      function tierChip(fieldLabel, info, meaning) {
+        const t = (info && info.tier) || 'absent';
+        const tplId = t === 'validated' ? 'tpl-tier-validated' : (t === 'present' ? 'tpl-tier-present' : null);
+        if (!tplId) return;
+        const tpl = document.getElementById(tplId);
+        if (!tpl) return;
+        const el = tpl.content.firstElementChild.cloneNode(true);
+        el.textContent = (t === 'validated' ? '✓✓ ' : '✓ ') + fieldLabel + ' — ' + (t === 'validated' ? 'Validated' : 'Present') + (t === 'validated' && meaning ? ' · ' + meaning : '');
+        tags.appendChild(el);
+      }
+      const q = s.quality;
+      const phoneInfo = q.phone || {};
+      let phoneMeaning = 'format + line type';
+      if (phoneInfo.line_type) phoneMeaning += ' (' + phoneInfo.line_type.replace(/_/g, ' ') + ')';
+      tierChip('Phone', phoneInfo, phoneMeaning);
+      tierChip('Email', q.email || {}, 'syntax + MX');
+      tierChip('Address', q.address || {}, 'geocoded');
+      tierChip('Website', q.website || {}, 'reachable');
+      const lockedTpl = document.getElementById('tpl-tier-locked');
+      if (lockedTpl) tags.appendChild(lockedTpl.content.firstElementChild.cloneNode(true));
+    } else {
+      function tag(t, cls) { const e = document.createElement('span'); e.className = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ' + cls; e.textContent = t; tags.appendChild(e); }
+      if (s.has_phone) tag('✓ Validated phone', 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100');
+      if (s.has_email) tag('Email', 'bg-slate-100 text-ink-600');
+      if (s.has_website) tag('Website', 'bg-slate-100 text-ink-600');
+    }
     card.appendChild(tags);
     if (s.reason) { const rp = document.createElement('p'); rp.className = 'mt-2.5 line-clamp-2 text-[12.5px] leading-snug text-ink-500'; rp.textContent = s.reason; card.appendChild(rp); }
     const foot = document.createElement('div'); foot.className = 'mt-auto flex items-center justify-between border-t border-slate-100 pt-3 mt-3';
