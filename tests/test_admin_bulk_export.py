@@ -188,3 +188,26 @@ def test_global_suppression_hides_lead_from_reveal_and_export():
                 data={"csrf_token": token, "format": "csv", "lead_ids": str(lid)})
     assert r2.status_code == 200
     assert "Globally Suppressed Co" not in r2.content.decode("utf-8", "replace")
+
+
+def test_export_degenerate_composition_returns_400():
+    """Degenerate compositions must be rejected with 400, not 500 (KeyError guard)."""
+    import json as _json
+    _ensure_admin()
+    c = TestClient(lv.app)
+    token = _login(c, "admin@demo.local", "admin12345")
+
+    # {} — empty dict, no "op" and no "predicate"
+    r = c.post("/admin/bulk/export",
+               data={"csrf_token": token, "format": "csv",
+                     "composition": _json.dumps({})})
+    assert r.status_code == 400
+    assert "Invalid targeting composition" in r.text
+
+    # Node missing "predicate" — would KeyError inside matching_by_composition
+    bad_comp = {"op": "AND", "nodes": [{"params": {}}]}
+    r2 = c.post("/admin/bulk/export",
+                data={"csrf_token": token, "format": "csv",
+                      "composition": _json.dumps(bad_comp)})
+    assert r2.status_code == 400
+    assert "Invalid targeting composition" in r2.text

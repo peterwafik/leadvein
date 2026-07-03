@@ -34,6 +34,28 @@ from app.web.deps import get_session, current_user
 
 router = APIRouter(prefix="/admin/bulk")
 
+
+def _valid_composition(node) -> bool:
+    """Minimal structural check — rejects degenerate or predicate-less compositions.
+
+    A valid composition is either:
+    - A compound node: dict with op in ("AND","OR") and nodes as a list of valid nodes
+    - A leaf node: dict with a non-empty "predicate" string
+    Returns False for {} or any node missing "predicate".
+    """
+    if not isinstance(node, dict):
+        return False
+    if "op" in node:
+        if node["op"] not in ("AND", "OR"):
+            return False
+        nodes = node.get("nodes", [])
+        if not isinstance(nodes, list):
+            return False
+        return all(_valid_composition(child) for child in nodes)
+    # Leaf node: must have a non-empty predicate string
+    return isinstance(node.get("predicate"), str) and bool(node["predicate"])
+
+
 # Hard cap on a single export — both id-list and composition modes.  Guards against
 # a whole-inventory dump; narrow the targeting to fit.  (Module-level so tests can
 # monkeypatch it to a small value instead of seeding tens of thousands of rows.)
@@ -164,6 +186,12 @@ async def bulk_export(request: Request, session: Session = Depends(get_session))
             composition = json.loads(composition_raw)
         except (json.JSONDecodeError, TypeError):
             return Response(status_code=400)
+        if not _valid_composition(composition):
+            return Response(
+                content="Invalid targeting composition.",
+                status_code=400,
+                media_type="text/plain",
+            )
         comp_hash = hashlib.sha256(
             json.dumps(composition, sort_keys=True).encode()
         ).hexdigest()[:16]
