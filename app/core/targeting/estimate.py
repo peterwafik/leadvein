@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import or_
+
+from app.core.db import Lead
 from app.core.masking import mask_preview
 from app.core.retention import is_expired
 from app.core.compliance import lead_opted_out
@@ -31,7 +34,13 @@ def _fresh_band(d):
 
 
 def estimate(session, buyer_account_id, composition, *, sample: int = 8, ctx=None) -> dict:
-    leads = matching_by_composition(session, composition)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    expiry_clause = or_(
+        Lead.retention_expiry.is_(None),
+        Lead.retention_expiry == "",
+        Lead.retention_expiry > now_iso,
+    )
+    leads = matching_by_composition(session, composition, extra_clauses=[expiry_clause])
     visible = [l for l in leads
                if not is_expired(l)
                and not lead_opted_out(session, l)
