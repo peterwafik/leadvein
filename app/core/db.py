@@ -60,14 +60,17 @@ class CategoryMapping(SQLModel, table=True):
 
 class Lead(SQLModel, table=True):
     __tablename__ = "lv_lead"
-    __table_args__ = (Index("ix_lv_lead_source_key_col", "source_key"),)
+    __table_args__ = (
+        Index("ix_lv_lead_source_key_col", "source_key"),
+        Index("ix_lv_lead_country_score", "country", "score_total"),
+    )
     id: int | None = Field(default=None, primary_key=True)
     business_name: str = ""
     category_keys_json: str = "[]"
     # location
     address_line1: str = ""
     city: str = Field(default="", index=True)
-    region: str = ""
+    region: str = Field(default="", index=True)
     postal_code: str = ""
     country: str = Field(default="", index=True)
     latitude: float | None = None
@@ -97,7 +100,7 @@ class Lead(SQLModel, table=True):
     date_discovered: str = Field(default_factory=_now)
     date_last_verified: str | None = Field(default=None, index=True)
     suppression_status: str = "clear"
-    retention_expiry: str | None = None
+    retention_expiry: str | None = Field(default=None, index=True)
     # marketplace
     price_credits: int = 1
     exclusivity_status: str = "non_exclusive"
@@ -251,6 +254,17 @@ class IngestRequest(SQLModel, table=True):
 
 
 def init_db(url: str = "sqlite:///leadvault.db"):
+    from sqlalchemy import event
+
     engine = create_engine(url, connect_args={"check_same_thread": False})
+
+    if url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def _sqlite_pragmas(dbapi_conn, _record):   # pragma: no cover - exercised via test
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.close()
+
     SQLModel.metadata.create_all(engine)
     return engine
