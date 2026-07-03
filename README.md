@@ -71,6 +71,11 @@ You are responsible for complying with urlscan/PublicWWW Terms of Service and ap
 contact info. Every lead row has a **Status** column (default "Not contacted") so the sheet
 doubles as an outreach tracker and supports opt-out handling.
 
+## Data sources & licensing
+- **Geographic reference:** country/region/city reference data derived from
+  [GeoNames](https://www.geonames.org) (CC BY 4.0). Used only to render the area
+  selector; lead coverage counts always come from actual inventory.
+
 ## LeadVault (compliant B2B lead marketplace)
 
 Run the marketplace app:
