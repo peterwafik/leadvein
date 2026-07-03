@@ -61,3 +61,19 @@ def test_quick_mode_renders():
     r = c.get("/app/find", params={"mode": "quick"})
     assert r.status_code == 200
     assert "Quick search" in r.text
+
+
+def test_find_page_audience_param_embeds_preset():
+    c = _client(); token = _login(c)
+    import json as _json
+    comp = {"op": "AND", "nodes": [{"predicate": "geo.city_any", "params": {"in": ["Oxford"]}}]}
+    c.post("/app/find/save", data={"csrf_token": token, "name": "Preset Aud",
+                                   "composition": _json.dumps(comp), "origin_key": ""},
+           follow_redirects=False)
+    import re as _re
+    m = _re.search(r'/app/find\?audience=(\d+)', c.get("/app/audiences").text)
+    assert m, "audiences page must link to open-in-find"
+    html = c.get(f"/app/find?audience={m.group(1)}").text
+    assert "window._preset" in html
+    assert "geo.city_any" in html          # the saved composition is embedded
+    assert "Oxford" in html

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
@@ -195,9 +196,9 @@ def composer_page(request: Request, session: Session = Depends(get_session)):
     campaign = request.query_params.get("campaign", "")
     segment = request.query_params.get("segment", "")
     if campaign:
-        return redirect(f"/app/find?campaign={campaign}")
+        return redirect(f"/app/find?campaign={urllib.parse.quote(campaign, safe='')}")
     if segment:
-        return redirect(f"/app/find?audience={segment}")
+        return redirect(f"/app/find?audience={urllib.parse.quote(segment, safe='')}")
     return redirect("/app/find")
 
 
