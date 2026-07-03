@@ -15,7 +15,7 @@ _CAMPAIGNS = [
     {
         "key": "utilities_uk",
         "name": "Utilities (UK)",
-        "description": "UK utilities leads — cross-category (INV-8: no category predicate).",
+        "description": "UK utilities leads — covers all business types across the sector.",
         "quality_profile_key": "utilities",
         "scoring_profile_key": "utility_energy",
         "gated_signals": [],
@@ -40,8 +40,8 @@ _CAMPAIGNS = [
         "name": "Online ordering upgrades",
         "description": (
             "Restaurants running GloriaFood or ChowNow — "
-            "a proven ground-truth recipe for online-ordering intent. "
-            "Targets by tech fingerprint, not taxonomy (INV-8)."
+            "a proven ground-truth signal for online-ordering intent. "
+            "Targets by detected platform, not business category."
         ),
         "quality_profile_key": "baseline",
         "scoring_profile_key": "",
@@ -70,7 +70,7 @@ _CAMPAIGNS = [
         "name": "Shopify stores (UK)",
         "description": (
             "UK businesses running Shopify — "
-            "identified via tech fingerprint (INV-8: no category predicate)."
+            "identified via detected platform — not limited to a specific business category."
         ),
         "quality_profile_key": "baseline",
         "scoring_profile_key": "",
@@ -93,7 +93,7 @@ _CAMPAIGNS = [
         "name": "Business Restructuring",
         "description": (
             "Businesses in financial distress / restructuring. "
-            "Gated financial + size signals are declared but NOT used in the composition."
+            "Gated financial + size signals are shown but require a licensed data source to activate."
         ),
         "quality_profile_key": "baseline",
         "scoring_profile_key": "",
