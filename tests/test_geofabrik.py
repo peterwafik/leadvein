@@ -98,3 +98,36 @@ def test_sync_ingest_rejects_bulk_only_key():
     assert "NotImplementedError" not in r.text, (
         "Response must not expose NotImplementedError from Geofabrik discover()"
     )
+
+
+def test_default_get_retries_transient_failures(tmp_path, monkeypatch):
+    """Observed live 2026-07-04: a read-timeout mid-download killed a nation run.
+    _default_get must retry transient network errors before giving up."""
+    import requests as _rq
+    from app.adapters import geofabrik as gf
+
+    calls = {"n": 0}
+
+    class _FakeResp:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def raise_for_status(self):
+            pass
+        def iter_content(self, chunk_size):
+            yield b"pbf-bytes"
+
+    def flaky_get(url, stream, timeout):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise _rq.Timeout("stalled")
+        return _FakeResp()
+
+    monkeypatch.setattr(gf.requests, "get", flaky_get)
+    monkeypatch.setattr(gf.time, "sleep", lambda s: None)
+    dest = str(tmp_path / "x.pbf")
+    gf._default_get("http://example/x.pbf", dest)
+    assert calls["n"] == 3
+    with open(dest, "rb") as f:
+        assert f.read() == b"pbf-bytes"

@@ -45,14 +45,26 @@ REGIONS: dict[str, dict] = {
 }
 
 
-def _default_get(url: str, dest: str) -> None:
-    with requests.get(url, stream=True, timeout=600) as r:
-        r.raise_for_status()
-        tmp = dest + ".part"
-        with open(tmp, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1 << 20):
-                f.write(chunk)
-        os.replace(tmp, dest)
+def _default_get(url: str, dest: str, *, attempts: int = 3, backoff_s: int = 30) -> None:
+    """Streaming download with retry — large extracts on flaky links stall
+    occasionally (observed live: a read-timeout mid-Scotland on 2026-07-04).
+    Each attempt restarts the download; the .part temp keeps dest atomic."""
+    last_exc: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            with requests.get(url, stream=True, timeout=600) as r:
+                r.raise_for_status()
+                tmp = dest + ".part"
+                with open(tmp, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=1 << 20):
+                        f.write(chunk)
+                os.replace(tmp, dest)
+                return
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exc = exc
+            if attempt < attempts - 1:
+                time.sleep(backoff_s)
+    raise last_exc  # all attempts exhausted
 
 
 def download_extract(region_key: str, *, dest_dir: str = os.path.join("var", "pbf"),
