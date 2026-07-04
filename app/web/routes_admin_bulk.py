@@ -56,10 +56,9 @@ def _valid_composition(node) -> bool:
     return isinstance(node.get("predicate"), str) and bool(node["predicate"])
 
 
-# Hard cap on a single export — both id-list and composition modes.  Guards against
-# a whole-inventory dump; narrow the targeting to fit.  (Module-level so tests can
-# monkeypatch it to a small value instead of seeding tens of thousands of rows.)
-MAX_EXPORT_ROWS = 10_000
+# Export size is UNCAPPED by operator decision (2026-07-04): the owner may dump the
+# full serveable inventory in one file.  Large exports build in memory — at national
+# scale (100k+ rows) expect the request to take minutes and the XLSX to be large.
 
 # Export columns: standard set + geo + tier labels + provenance
 BULK_EXPORT_COLUMNS = EXPORT_COLUMNS + [
@@ -214,15 +213,6 @@ async def bulk_export(request: Request, session: Session = Depends(get_session))
 
     else:
         return Response(status_code=400)
-
-    # Hard cap — refuse a whole-inventory dump; caller must narrow the targeting.
-    if len(serveable_leads) > MAX_EXPORT_ROWS:
-        return Response(
-            content=(f"Export capped at {MAX_EXPORT_ROWS:,} rows — "
-                     "narrow the targeting first."),
-            status_code=400,
-            media_type="text/plain",
-        )
 
     rows = [_make_export_row(lead) for lead in serveable_leads]
 

@@ -35,6 +35,13 @@ REGIONS: dict[str, dict] = {
                        "country": "GB", "label": "England - West Midlands"},
     "greater-london": {"path": "europe/united-kingdom/england/greater-london",
                         "country": "GB", "label": "England - Greater London (large)"},
+    # Nation-level extracts for full-UK coverage (multi-hour runs; see runbook).
+    "wales": {"path": "europe/united-kingdom/wales", "country": "GB",
+               "label": "Wales (nation - hours)"},
+    "scotland": {"path": "europe/united-kingdom/scotland", "country": "GB",
+                  "label": "Scotland (nation - hours)"},
+    "england": {"path": "europe/united-kingdom/england", "country": "GB",
+                 "label": "England (nation - LONG run, tens of hours)"},
 }
 
 

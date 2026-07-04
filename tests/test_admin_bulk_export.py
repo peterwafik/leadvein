@@ -154,21 +154,23 @@ def test_buyer_find_has_no_bulk_js():
     assert "/admin/bulk/reveal" not in html
 
 
-def test_export_capped_at_max_rows(monkeypatch):
-    """Both export modes refuse a dump past MAX_EXPORT_ROWS (monkeypatched low)."""
+def test_export_is_uncapped():
+    """Operator decision 2026-07-04: exports have NO row cap — the owner may dump
+    the full serveable inventory in one file. This replaces the old 10k-cap test."""
     _ensure_admin()
     ids = []
     with Session(lv.engine) as s:
         for i in range(3):
-            ids.append(_seed_lead(s, f"Cap Row {i}"))
-    monkeypatch.setattr("app.web.routes_admin_bulk.MAX_EXPORT_ROWS", 2)
+            ids.append(_seed_lead(s, f"Uncap Row {i}"))
     c = TestClient(lv.app)
     token = _login(c, "admin@demo.local", "admin12345")
     r = c.post("/admin/bulk/export",
                data={"csrf_token": token, "format": "csv",
                      "lead_ids": ",".join(str(i) for i in ids)})
-    assert r.status_code == 400
-    assert "capped" in r.text.lower()
+    assert r.status_code == 200
+    body = r.content.decode("utf-8", errors="replace")
+    for i in range(3):
+        assert f"Uncap Row {i}" in body
 
 
 def test_global_suppression_hides_lead_from_reveal_and_export():
