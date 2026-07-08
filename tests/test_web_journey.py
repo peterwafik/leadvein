@@ -29,6 +29,20 @@ def test_demo_buyer_login_sets_session():
     assert "session" in r.headers.get("set-cookie", "").lower()
 
 
+def test_admin_login_page_does_not_loop():
+    # Regression: an admin with a live session hitting GET /login must not be
+    # sent to /app (buyer-only, which bounces admins back to /login -> infinite
+    # redirect loop -> ERR_TOO_MANY_REDIRECTS in the browser). It must go to /admin.
+    c = client()
+    token = _token_from(c.get("/login").text)
+    c.post("/login", data={"email": "admin@leadvault.local", "password": "admin12345",
+                           "csrf_token": token})
+    r = c.get("/login", follow_redirects=False)
+    assert r.status_code in (302, 303), f"expected redirect for logged-in admin, got {r.status_code}"
+    assert r.headers.get("location") == "/admin", \
+        f"admin /login must route to /admin, not loop via {r.headers.get('location')}"
+
+
 def test_full_buyer_journey(monkeypatch):
     from sqlmodel import Session
     import json

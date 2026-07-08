@@ -15,8 +15,12 @@ router = APIRouter()
 
 @router.get("/login")
 def login_page(request: Request, session: Session = Depends(get_session)):
-    if current_user(request, session):
-        return redirect("/app")
+    u = current_user(request, session)
+    if u:
+        # Route by role: /app is buyer-only and bounces admins back to /login,
+        # so sending a logged-in admin to /app would loop forever. Mirror the
+        # POST handler, which already lands admins on /admin.
+        return redirect("/admin" if u.role == "admin" else "/app")
     return templates.TemplateResponse(request, "login.html", {
         "request": request, "user": None, "csrf": ensure_csrf(request)})
 
